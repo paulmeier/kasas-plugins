@@ -35,6 +35,7 @@ plugins in the repo, so the raw endpoint is authoritative.
       "hooks": ["OnTransactionCreate", "OnTransactionUpdate"],
       "capabilities": ["transactions:read", "labels:write"],
       "capability_tier": "write",             // "read-only" | "write"
+      "ui": { "title": "Coffee Budget", "icon": "coin" },  // present iff the plugin has a dashboard page
       "path": "plugins/coffee-budget",        // repo-relative directory
       "files": [
         { "path": "README.md",   "sha256": "…", "size": 776 },
@@ -63,6 +64,7 @@ document is byte-stable across machines (only `generated_at` varies, which the
 | `plugins[].files[]` | Every file the installer must download: `path` (plugin-relative, forward slashes), `sha256` (hex), `size`. |
 | `plugins[].content_hash` | `sha256:` + the SHA-256 of `"<path>\0<filehash>\n"` lines in `path` order. Changes if any file's name or content changes — use it to detect updates. |
 | `plugins[].capability_tier` | `read-only` if the plugin only reads; `write` if it can modify user data. The dashboard should warn more prominently on `write`. |
+| `plugins[].ui` | Present only when the plugin contributes a dashboard page: its sidebar `title` and curated `icon` name. The marketplace can badge such plugins ("adds a dashboard page") before install. |
 
 ## How the dashboard should install a plugin
 

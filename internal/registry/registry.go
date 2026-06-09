@@ -51,10 +51,20 @@ type Plugin struct {
 	Hooks          []string `json:"hooks"`
 	Capabilities   []string `json:"capabilities"`
 	CapabilityTier string   `json:"capability_tier"`
-	Path           string   `json:"path"`         // repo-relative dir, e.g. "plugins/budgeting"
-	Files          []File   `json:"files"`        // every file the installer must fetch
-	ContentHash    string   `json:"content_hash"` // "sha256:..." over all files
-	SizeBytes      int64    `json:"size_bytes"`
+	// UI is present when the plugin contributes a dashboard page, so the
+	// marketplace can badge it before install.
+	UI          *UIInfo `json:"ui,omitempty"`
+	Path        string  `json:"path"`         // repo-relative dir, e.g. "plugins/budgeting"
+	Files       []File  `json:"files"`        // every file the installer must fetch
+	ContentHash string  `json:"content_hash"` // "sha256:..." over all files
+	SizeBytes   int64   `json:"size_bytes"`
+}
+
+// UIInfo mirrors the manifest's [ui] block: the sidebar title and curated icon
+// name of the plugin's dashboard page.
+type UIInfo struct {
+	Title string `json:"title"`
+	Icon  string `json:"icon"`
 }
 
 // File is one installable file with its integrity hash, so the dashboard can verify
@@ -109,6 +119,10 @@ func pluginEntry(rep *gate.Report, dir, repoRelPath string) (Plugin, error) {
 	if err != nil {
 		return Plugin{}, err
 	}
+	var ui *UIInfo
+	if m.UI != nil {
+		ui = &UIInfo{Title: m.UI.Title, Icon: m.UI.Icon}
+	}
 	return Plugin{
 		Name:           m.Name,
 		Version:        m.Version,
@@ -121,6 +135,7 @@ func pluginEntry(rep *gate.Report, dir, repoRelPath string) (Plugin, error) {
 		Hooks:          hookStrings(m.Hooks),
 		Capabilities:   capStrings(m.Capabilities),
 		CapabilityTier: string(rep.CapabilityTier),
+		UI:             ui,
 		Path:           repoRelPath,
 		Files:          files,
 		ContentHash:    hash,

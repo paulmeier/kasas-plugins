@@ -22,6 +22,48 @@ function OnTransactionUpdate(txn)
   classify(txn)
 end
 
+-- OnPageRender backs the plugin's dashboard page ("Coffee Budget" in the
+-- sidebar, at /ext/coffee-budget). It is read-only by contract: it returns a
+-- declarative page document (stat / keyvalue / table / actions blocks) that the
+-- host validates and the dashboard renders — the plugin ships no frontend code.
+function OnPageRender(req)
+  local matches = kasas.search(kasas.config.keyword, 100)
+  local rows = {}
+  for _, txn in ipairs(matches) do
+    rows[#rows + 1] = { txn.description, txn.amount }
+  end
+  return {
+    title = "Coffee Budget",
+    blocks = {
+      { type = "stat", label = "Matching transactions", value = #matches,
+        hint = 'description contains "' .. kasas.config.keyword .. '"' },
+      { type = "keyvalue", items = {
+          { key = "Keyword", value = kasas.config.keyword },
+          { key = "Category applied", value = kasas.config.category },
+      } },
+      { type = "heading", text = "Recent matches" },
+      { type = "table", columns = { "Description", "Amount" }, rows = rows },
+      { type = "actions", actions = {
+          { id = "relabel", label = "Re-label matches", style = "primary" },
+      } },
+    },
+  }
+end
+
+-- OnPageAction handles the page's buttons (mutations belong here, not in
+-- OnPageRender). "relabel" re-applies the category label to every current
+-- match, then re-renders the page.
+function OnPageAction(req)
+  if req.action == "relabel" then
+    local matches = kasas.search(kasas.config.keyword, 1000)
+    for _, txn in ipairs(matches) do
+      kasas.apply_labels(txn.id, { category = kasas.config.category })
+    end
+    kasas.log("info", "coffee-budget re-labeled matches from the dashboard", { count = #matches })
+  end
+  return OnPageRender(req)
+end
+
 -- OnUninstall runs once when the plugin is uninstalled. This plugin is responsible
 -- for undoing what it created, so it removes the category label from the
 -- transactions it would have matched, leaving no trace behind.

@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-09T16:55:33.274145208Z",
+  "generated_at": "2026-06-09T20:42:23.889322168Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
       "name": "coffee-budget",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Labels transactions whose description matches a keyword (default: coffee).",
       "author": "kasas community",
       "license": "MIT",
@@ -15,33 +15,40 @@
       "hooks": [
         "OnTransactionCreate",
         "OnTransactionUpdate",
+        "OnPageRender",
+        "OnPageAction",
         "OnUninstall"
       ],
       "capabilities": [
         "transactions:read",
-        "labels:write"
+        "labels:write",
+        "ui:page"
       ],
       "capability_tier": "write",
+      "ui": {
+        "title": "Coffee Budget",
+        "icon": "coin"
+      },
       "path": "plugins/coffee-budget",
       "files": [
         {
           "path": "README.md",
-          "sha256": "87936c4c927b675f2e08661e1bd6fc7113a3299585b8b7a900e1160456f94a0a",
-          "size": 955
+          "sha256": "93a357ef3ac33eee694fbc9ca21f258c9f14923e886720ec5801f925818fbf47",
+          "size": 1454
         },
         {
           "path": "main.lua",
-          "sha256": "aa0ba215d68deac6facf57fede519640ac808e32967f93696849444f1f37113a",
-          "size": 1299
+          "sha256": "df1156c90cbec214e00c52f3bebde6dfd0ea5b838eafc640e689337e7f50dc62",
+          "size": 3029
         },
         {
           "path": "plugin.toml",
-          "sha256": "312170875c8cb2e122782130370f6457a307ed85dadf7c42e711caf8b9f72f64",
-          "size": 567
+          "sha256": "19e23a2ae90cac89eda088ceaa2dd357b53cc5c54de4c8b48822b090c64f0923",
+          "size": 766
         }
       ],
-      "content_hash": "sha256:1ca83f6776c33618c42602d92803ead56d908674ae640205ff3bba195b8775c9",
-      "size_bytes": 2821
+      "content_hash": "sha256:95c400c569f80acc7755292eb0d65c6ee185450cdee9db823e7fa08534753d31",
+      "size_bytes": 5249
     },
     {
       "name": "large-expense-alert",

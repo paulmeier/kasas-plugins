@@ -17,11 +17,15 @@ const (
 	TierWrite Tier = "write"
 )
 
-// capabilityRisk maps each capability to whether it grants write power.
+// capabilityRisk maps each capability to whether it grants write power. ui:page
+// is not a write: a page can only display what the plugin's OTHER capabilities
+// let it read, and its actions mutate only through those same capabilities — so
+// the tier is still decided by what the plugin can touch, not by having a page.
 var capabilityWrite = map[manifest.Capability]bool{
 	manifest.CapTransactionsRead: false,
 	manifest.CapLabelsWrite:      true,
 	manifest.CapExtensionsWrite:  true,
+	manifest.CapUIPage:           false,
 }
 
 // tierFor returns the highest risk tier implied by a capability set. An empty set
@@ -56,6 +60,13 @@ func capabilityFindings(m manifest.Manifest) []Finding {
 				Severity: SeverityWarning,
 				Code:     "cap.write_requested",
 				Message:  "requests write capability " + string(c) + "; this plugin can modify user data and requires reviewer sign-off",
+			})
+		}
+		if c == manifest.CapUIPage {
+			out = append(out, Finding{
+				Severity: SeverityWarning,
+				Code:     "cap.ui_page",
+				Message:  "provides a dashboard page (sidebar entry + rendered page); review the OnPageRender/OnPageAction hooks for what they show and do",
 			})
 		}
 	}

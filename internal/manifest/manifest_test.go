@@ -96,3 +96,99 @@ func TestParseRejects(t *testing.T) {
 		})
 	}
 }
+
+const uiManifestBase = `
+name        = "pager"
+version     = "1.0.0"
+description = "A plugin with a dashboard page."
+author      = "someone"
+runtime     = "lua"
+license     = "MIT"
+homepage    = "https://example.com/pager"
+hooks        = ["OnPageRender", "OnPageAction", "OnUninstall"]
+capabilities = ["ui:page"]
+`
+
+func TestParseUIValid(t *testing.T) {
+	m, err := Parse([]byte(uiManifestBase + "[ui]\ntitle = \"Pager\"\nicon = \"chart\"\n"))
+	if err != nil {
+		t.Fatalf("expected valid ui manifest, got error: %v", err)
+	}
+	if m.UI == nil || m.UI.Title != "Pager" || m.UI.Icon != "chart" {
+		t.Fatalf("unexpected ui block: %+v", m.UI)
+	}
+}
+
+func TestParseUIIconDefaults(t *testing.T) {
+	m, err := Parse([]byte(uiManifestBase + "[ui]\ntitle = \"Pager\"\n"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if m.UI.Icon != "puzzle" {
+		t.Fatalf("expected icon to default to puzzle, got %q", m.UI.Icon)
+	}
+}
+
+func TestParseUIRejects(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"page hook without ui block", `
+name = "pager"
+version = "1.0.0"
+description = "A plugin with a dashboard page."
+author = "someone"
+runtime = "lua"
+license = "MIT"
+homepage = "https://example.com"
+hooks = ["OnPageRender", "OnUninstall"]
+capabilities = ["ui:page"]
+`},
+		{"ui capability without ui block", `
+name = "pager"
+version = "1.0.0"
+description = "A plugin with a dashboard page."
+author = "someone"
+runtime = "lua"
+license = "MIT"
+homepage = "https://example.com"
+hooks = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["ui:page"]
+`},
+		{"ui block without render hook", `
+name = "pager"
+version = "1.0.0"
+description = "A plugin with a dashboard page."
+author = "someone"
+runtime = "lua"
+license = "MIT"
+homepage = "https://example.com"
+hooks = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["ui:page"]
+[ui]
+title = "Pager"
+`},
+		{"ui block without capability", `
+name = "pager"
+version = "1.0.0"
+description = "A plugin with a dashboard page."
+author = "someone"
+runtime = "lua"
+license = "MIT"
+homepage = "https://example.com"
+hooks = ["OnPageRender", "OnUninstall"]
+[ui]
+title = "Pager"
+`},
+		{"missing title", uiManifestBase + "[ui]\nicon = \"chart\"\n"},
+		{"unknown icon", uiManifestBase + "[ui]\ntitle = \"Pager\"\nicon = \"sparkles\"\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Parse([]byte(tc.src)); err == nil {
+				t.Fatalf("expected rejection for %q, got none", tc.name)
+			}
+		})
+	}
+}

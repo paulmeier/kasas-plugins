@@ -119,3 +119,42 @@ func TestMarshalDeterministic(t *testing.T) {
 		t.Fatal("expected trailing newline")
 	}
 }
+
+// TestBuildIndexCarriesUI checks a page-bearing plugin's index entry includes
+// the ui metadata so the marketplace can badge it.
+func TestBuildIndexCarriesUI(t *testing.T) {
+	plugins := t.TempDir()
+	mf := `
+name="pager"
+version="1.0.0"
+description="shows a dashboard page"
+author="a"
+runtime="lua"
+license="MIT"
+homepage="https://example.com"
+hooks=["OnPageRender","OnUninstall"]
+capabilities=["ui:page"]
+[ui]
+title="Pager"
+icon="chart"
+`
+	writePlugin(t, plugins, "pager", map[string]string{
+		"plugin.toml": mf,
+		"main.lua":    "function OnPageRender(req) return { blocks = { { type = \"text\", text = \"hi\" } } } end\nfunction OnUninstall() end\n",
+		"README.md":   "# pager\n",
+	})
+	idx, failures, err := Build("https://example.com/repo", plugins, "plugins", gate.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failures) != 0 {
+		t.Fatalf("unexpected gate failures: %v", failures)
+	}
+	if len(idx.Plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(idx.Plugins))
+	}
+	ui := idx.Plugins[0].UI
+	if ui == nil || ui.Title != "Pager" || ui.Icon != "chart" {
+		t.Fatalf("expected ui metadata in the index, got %+v", ui)
+	}
+}
