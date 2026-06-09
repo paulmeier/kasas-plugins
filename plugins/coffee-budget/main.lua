@@ -26,7 +26,9 @@ end
 -- sidebar, at /ext/coffee-budget). It is read-only by contract: it returns a
 -- declarative page document (stat / keyvalue / table / actions blocks) that the
 -- host validates and the dashboard renders — the plugin ships no frontend code.
-function OnPageRender(req)
+-- The host passes a request argument (plugin/action/params); this page is the
+-- same for every request, so the parameter is omitted (Lua discards extra args).
+function OnPageRender()
   local matches = kasas.search(kasas.config.keyword, 100)
   local rows = {}
   for _, txn in ipairs(matches) do
@@ -61,7 +63,7 @@ function OnPageAction(req)
     end
     kasas.log("info", "coffee-budget re-labeled matches from the dashboard", { count = #matches })
   end
-  return OnPageRender(req)
+  return OnPageRender()
 end
 
 -- OnUninstall runs once when the plugin is uninstalled. This plugin is responsible

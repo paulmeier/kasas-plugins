@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-09T20:42:23.889322168Z",
+  "generated_at": "2026-06-09T21:16:53.491449299Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
@@ -38,8 +38,8 @@
         },
         {
           "path": "main.lua",
-          "sha256": "df1156c90cbec214e00c52f3bebde6dfd0ea5b838eafc640e689337e7f50dc62",
-          "size": 3029
+          "sha256": "c3aba02fbc3b06e5f1c8ac565b8c30d46db861c1564629e23bc1a0fa4550ec8b",
+          "size": 3184
         },
         {
           "path": "plugin.toml",
@@ -47,8 +47,8 @@
           "size": 766
         }
       ],
-      "content_hash": "sha256:95c400c569f80acc7755292eb0d65c6ee185450cdee9db823e7fa08534753d31",
-      "size_bytes": 5249
+      "content_hash": "sha256:abb65c77a71e2bfe69651bcd94465608ef6d434fafd3a2db9370253007051ead",
+      "size_bytes": 5404
     },
     {
       "name": "large-expense-alert",
