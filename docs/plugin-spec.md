@@ -44,7 +44,7 @@ category = "food"
 | `capabilities` | no | Each one of the known capabilities (below). Declare only what you use. |
 | `license` | yes | SPDX id from the allowlist (below). *Registry-only.* |
 | `homepage` | yes | `https://` URL. *Registry-only.* |
-| `[config]` | no | Arbitrary table exposed to the plugin as `kasas.config`. |
+| `[config]` | no | The plugin's configurable keys **and their defaults**, exposed as `kasas.config`. This block is also the schema of what an end user may override (see [Configuration](#configuration)). |
 | `[ui]` | no | Declares a [dashboard page](#dashboard-pages-ui): `title` (≤40 chars) and an optional curated `icon` name. Requires the `OnPageRender` hook and the `ui:page` capability. |
 
 Unknown keys are tolerated (the host ignores them), but don't rely on them — they
@@ -90,7 +90,9 @@ A capability is a permission the host enforces at the `kasas` API boundary.
 | `extensions:write` | `kasas.set_extension`, `kasas.remove_extension` | **write** |
 | `ui:page` | a [dashboard page](#dashboard-pages-ui) (sidebar entry + rendered page) | read-only* |
 
-`kasas.log(...)` and `kasas.config` are always available and need no capability.
+`kasas.log(...)`, `kasas.config`, and `kasas.set_config(...)` are always
+available and need no capability (`set_config` only writes the plugin's own
+configuration, never ledger data).
 A **write** capability requires maintainer sign-off (see CONTRIBUTING.md).
 \* `ui:page` itself mutates nothing — a page can only show what the plugin's other
 capabilities let it read, and its actions write only through those capabilities —
@@ -138,16 +140,66 @@ end
 
 **Block types:** `heading`/`text` (`text`), `stat` (`label`, `value`, `hint?`),
 `keyvalue` (`items` of `{key, value}`), `table` (`columns`, `rows`), `actions`
-(`{id, label, style?, params?}` buttons routed to `OnPageAction`), `divider`.
+(`{id, label, style?, params?}` buttons routed to `OnPageAction`), `form`
+(`{id, fields, submit_label?}` inputs routed to `OnPageAction` — see
+[Configuration](#configuration)), `divider`.
 Scalar values may be strings, numbers, or booleans (normalized to strings).
-Documents are bounded (≤256 KiB, ≤200 blocks, ≤1000 table rows) and an unknown
-block type is a render error.
+Documents are bounded (≤256 KiB, ≤200 blocks, ≤1000 table rows, ≤16 form
+fields) and an unknown block type is a render error.
 
 **Contract:** treat `OnPageRender` as read-only — it runs on every page view
 (read-tier API). Put mutations in `OnPageAction` (write-tier API). Both run under
 the host's per-hook timeout, serialized with your event hooks. See the
 [host docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#dashboard-pages)
 for the full schema and API surface.
+
+## Configuration
+
+The manifest's `[config]` block declares every configurable key with its
+default, and the host treats it as the **schema** of what the end user may
+change. Users configure an installed plugin two ways, both backed by the same
+file on the kasas host:
+
+1. **By hand**: editing `<plugins.dir>/<name>.config.toml` (a sibling of the
+   plugin's directory, so updates never wipe it) and reloading the plugin.
+2. **From your dashboard page**: render a `form` block and persist the
+   submitted values in `OnPageAction` with `kasas.set_config` (JS:
+   `kasas.setConfig`). The host validates each key against your `[config]`
+   defaults, coerces values to the default's type (form params arrive as
+   strings), **overwrites the config file**, updates the live `kasas.config`,
+   and returns the new effective config.
+
+```lua
+function OnPageRender(req)
+  return {
+    blocks = {
+      { type = "heading", text = "Settings" },
+      { type = "form", id = "save_settings", submit_label = "Save",
+        fields = {
+          { name = "keyword",  label = "Keyword",  value = kasas.config.keyword },
+          { name = "category", label = "Category", value = kasas.config.category },
+        } },
+    },
+  }
+end
+
+function OnPageAction(req)
+  if req.action == "save_settings" then
+    kasas.set_config({ keyword = req.params.keyword, category = req.params.category })
+  end
+  return OnPageRender(req)
+end
+```
+
+Form fields are `{name, label, kind?, value?, placeholder?, help?, options?}`
+with `kind` one of `text` (default), `number`, `toggle` (submits
+`"true"`/`"false"`), or `select` (requires `options`). On submit the host calls
+`OnPageAction` with the form's `id` as `req.action` and every field's value in
+`req.params`.
+
+Design your plugin so every tunable lives in `[config]` with a sensible
+default — that single block is what makes it configurable from both the TOML
+file and your page.
 
 ## License allowlist
 
@@ -171,6 +223,7 @@ To propose another, open an issue.
 | `kasas.remove_extension(id, key)` | `kasas.removeExtension(id, key)` | `extensions:write` |
 | `kasas.log(level, msg, {fields})` | `kasas.log(level, msg, {fields})` | — |
 | `kasas.config` | `kasas.config` | — |
+| `kasas.set_config({k=v})` | `kasas.setConfig({k:v})` | — |
 
 The full host API, data shapes, and the TypeScript `kasas.d.ts` ambient types are in
 the [host plugin docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md).

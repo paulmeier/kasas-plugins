@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-09T21:16:53.491449299Z",
+  "generated_at": "2026-06-09T21:47:35.657993728Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
       "name": "coffee-budget",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "Labels transactions whose description matches a keyword (default: coffee).",
       "author": "kasas community",
       "license": "MIT",
@@ -33,22 +33,22 @@
       "files": [
         {
           "path": "README.md",
-          "sha256": "93a357ef3ac33eee694fbc9ca21f258c9f14923e886720ec5801f925818fbf47",
-          "size": 1454
+          "sha256": "b7d09dce10fbaaabf432d33f114008580e67f7155589c2178a2d6b9e7fcda5a9",
+          "size": 1897
         },
         {
           "path": "main.lua",
-          "sha256": "c3aba02fbc3b06e5f1c8ac565b8c30d46db861c1564629e23bc1a0fa4550ec8b",
-          "size": 3184
+          "sha256": "900c58950140e044a95f60f9cd2fa22f9f3ffb85a1e5307bd3bf7eea5fe53f21",
+          "size": 4326
         },
         {
           "path": "plugin.toml",
-          "sha256": "19e23a2ae90cac89eda088ceaa2dd357b53cc5c54de4c8b48822b090c64f0923",
+          "sha256": "ae643396c0445c6ac37394312de9b30e57f9464a59f1128592b0ed6b99452b64",
           "size": 766
         }
       ],
-      "content_hash": "sha256:abb65c77a71e2bfe69651bcd94465608ef6d434fafd3a2db9370253007051ead",
-      "size_bytes": 5404
+      "content_hash": "sha256:f6f0674f92b45280d85d68441455c3121261a2b446556b88c32865b764bf76eb",
+      "size_bytes": 6989
     },
     {
       "name": "large-expense-alert",
