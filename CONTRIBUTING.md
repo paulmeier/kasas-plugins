@@ -58,11 +58,21 @@ entrypoint  = "main.lua"             # defaults: main.lua / main.js
 license  = "MIT"                     # SPDX, from the allowlist (see spec)
 homepage  = "https://github.com/you/my-plugin"   # https
 
-hooks        = ["OnTransactionCreate"]          # at least one
+hooks        = ["OnTransactionCreate", "OnUninstall"]  # OnUninstall is REQUIRED
 capabilities = ["transactions:read"]            # only what you use
 
 [config]                              # optional, exposed as kasas.config
 # ...
+```
+
+Every plugin **must** declare and implement the **`OnUninstall`** hook so it can
+clean up anything it created when removed (kasas runs it at uninstall). It runs with
+your granted capabilities — undo your labels/extensions there:
+
+```lua
+function OnUninstall()
+  -- remove what this plugin created; cleanup is the plugin's responsibility
+end
 ```
 
 `license` and `homepage` are registry metadata the host ignores, so the same

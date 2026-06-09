@@ -13,14 +13,20 @@ webhooks, the dashboard) can then react to the flag.
 Amounts are compared in integer cents, parsed from kasas's decimal-string amounts,
 so there is no floating-point rounding error.
 
+## Uninstalling
+
+On `OnUninstall`, the plugin searches the ledger and removes the
+`large_expense_alert.flagged` extension from every transaction that still carries
+it, so uninstalling leaves no trace.
+
 ## Capabilities
 
-| Capability         | Why |
-| ------------------ | --- |
-| `extensions:write` | Set the `large_expense_alert.flagged` extension. |
+| Capability          | Why |
+| ------------------- | --- |
+| `extensions:write`  | Set (and, on uninstall, remove) the `large_expense_alert.flagged` extension. |
+| `transactions:read` | Find flagged transactions during `OnUninstall` cleanup. |
 
-It does **not** request `transactions:read` — the hook already receives the
-transaction — and performs no filesystem, network, or process operations.
+It performs no filesystem, network, or process operations.
 
 ## Configuration
 

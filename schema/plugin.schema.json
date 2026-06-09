@@ -51,8 +51,10 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "enum": ["OnTransactionCreate", "OnTransactionUpdate", "OnSyncComplete"]
-      }
+        "enum": ["OnTransactionCreate", "OnTransactionUpdate", "OnSyncComplete", "OnUninstall"]
+      },
+      "contains": { "const": "OnUninstall" },
+      "description": "Must include the required OnUninstall lifecycle hook."
     },
     "capabilities": {
       "type": "array",

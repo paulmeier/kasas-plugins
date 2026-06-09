@@ -35,7 +35,7 @@ author      = "a"
 runtime     = "lua"
 license     = "MIT"
 homepage    = "https://example.com"
-hooks        = ["OnTransactionCreate"]
+hooks        = ["OnTransactionCreate", "OnUninstall"]
 capabilities = ["transactions:read", "labels:write"]
 `
 
@@ -118,7 +118,7 @@ runtime     = "js"
 entrypoint  = "main.js"
 license     = "MIT"
 homepage    = "https://example.com"
-hooks        = ["OnTransactionCreate"]
+hooks        = ["OnTransactionCreate", "OnUninstall"]
 capabilities = ["extensions:write"]
 `
 
@@ -190,7 +190,7 @@ runtime="js"
 entrypoint="main.ts"
 license="MIT"
 homepage="https://example.com"
-hooks=["OnTransactionCreate"]
+hooks=["OnTransactionCreate","OnUninstall"]
 capabilities=["extensions:write"]
 `,
 		"main.ts":   "interface T { id: string }\nfunction OnTransactionCreate(txn: T): void { kasas.setExtension(txn.id, \"x\", true); }\n",
@@ -293,7 +293,7 @@ author="a"
 runtime="lua"
 license="MIT"
 homepage="https://example.com"
-hooks=["OnSyncComplete"]
+hooks=["OnSyncComplete","OnUninstall"]
 capabilities=["transactions:read"]
 `
 	dir := writePlugin(t, "reader", map[string]string{

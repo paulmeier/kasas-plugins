@@ -14,6 +14,7 @@ globals = {
   "OnTransactionCreate",
   "OnTransactionUpdate",
   "OnSyncComplete",
+  "OnUninstall",
 }
 
 max_line_length = 120

@@ -11,7 +11,7 @@ runtime     = "lua"
 entrypoint  = "main.lua"
 license     = "MIT"
 homepage    = "https://example.com/good-plugin"
-hooks        = ["OnTransactionCreate"]
+hooks        = ["OnTransactionCreate", "OnUninstall"]
 capabilities = ["transactions:read"]
 `
 
@@ -34,7 +34,7 @@ author      = "a"
 runtime     = "js"
 license     = "MIT"
 homepage    = "https://example.com"
-hooks        = ["OnSyncComplete"]
+hooks        = ["OnSyncComplete", "OnUninstall"]
 `
 	m, err := Parse([]byte(src))
 	if err != nil {
@@ -49,7 +49,7 @@ func TestParseRejects(t *testing.T) {
 	base := map[string]string{
 		"name": `"good"`, "version": `"1.0.0"`, "description": `"a good description"`,
 		"author": `"a"`, "runtime": `"lua"`, "license": `"MIT"`,
-		"homepage": `"https://example.com"`, "hooks": `["OnTransactionCreate"]`,
+		"homepage": `"https://example.com"`, "hooks": `["OnTransactionCreate", "OnUninstall"]`,
 	}
 	build := func(overrides map[string]string, drop ...string) string {
 		m := map[string]string{}
@@ -76,8 +76,9 @@ func TestParseRejects(t *testing.T) {
 		{"bad name", build(map[string]string{"name": `"Bad Name"`})},
 		{"bad version", build(map[string]string{"version": `"v1"`})},
 		{"unknown runtime", build(map[string]string{"runtime": `"python"`})},
-		{"unknown hook", build(map[string]string{"hooks": `["OnWhatever"]`})},
+		{"unknown hook", build(map[string]string{"hooks": `["OnWhatever", "OnUninstall"]`})},
 		{"no hooks", build(map[string]string{"hooks": `[]`})},
+		{"missing uninstall hook", build(map[string]string{"hooks": `["OnTransactionCreate"]`})},
 		{"unknown capability", build(map[string]string{"capabilities": `["root:everything"]`})},
 		{"short description", build(map[string]string{"description": `"short"`})},
 		{"disallowed license", build(map[string]string{"license": `"GPL-3.0"`})},

@@ -51,14 +51,30 @@ carry no meaning to either the host or the registry.
 
 ## Hooks
 
-A hook is a global function the host calls when the matching event commits. Declare
-the ones you implement; the host requires a matching global function for each.
+A hook is a global function the host calls. **Event hooks** fire when the matching
+event commits; the **`OnUninstall` lifecycle hook** runs once when the plugin is
+uninstalled. Declare the ones you implement; the host requires a matching global
+function for each.
 
-| Hook | Fires on | Argument |
-| ---- | -------- | -------- |
-| `OnTransactionCreate` | `transaction.created` | the transaction |
-| `OnTransactionUpdate` | `transaction.updated` | the transaction |
-| `OnSyncComplete` | `sync.completed` | a sync summary |
+| Hook | Kind | Fires on | Argument |
+| ---- | ---- | -------- | -------- |
+| `OnTransactionCreate` | event | `transaction.created` | the transaction |
+| `OnTransactionUpdate` | event | `transaction.updated` | the transaction |
+| `OnSyncComplete` | event | `sync.completed` | a sync summary |
+| `OnUninstall` | lifecycle | uninstall (no event) | none |
+
+**`OnUninstall` is required.** Every plugin must declare and implement it so it can
+clean up anything it created (labels, extensions) when removed — cleanup is the
+plugin's responsibility, and kasas runs the hook at uninstall (best-effort: a
+failing hook does not block removal). It runs with the plugin's granted
+capabilities, so it can call the same `kasas` write methods it used to create data.
+
+```lua
+function OnUninstall()
+  -- undo what this plugin created; runs with the plugin's granted capabilities
+  kasas.log("info", "cleaning up")
+end
+```
 
 ## Capabilities
 

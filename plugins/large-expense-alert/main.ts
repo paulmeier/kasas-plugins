@@ -14,7 +14,10 @@ interface Transaction {
   id: string;
   amount: string; // decimal string, e.g. "-249.99"
   description: string;
+  extensions?: Record<string, unknown>;
 }
+
+const FLAG = "large_expense_alert.flagged";
 
 // Parse a decimal money string into integer cents. Returns null if unparseable.
 function toCents(amount: string): number | null {
@@ -36,7 +39,20 @@ function OnTransactionCreate(txn: Transaction): void {
   }
   // Expenses are negative; compare absolute values.
   if (amountCents < 0 && -amountCents > thresholdCents) {
-    kasas.setExtension(txn.id, "large_expense_alert.flagged", true);
+    kasas.setExtension(txn.id, FLAG, true);
     kasas.log("info", "flagged large expense", { id: txn.id, amount: txn.amount });
   }
+}
+
+// OnUninstall runs once when the plugin is uninstalled. This plugin owns its
+// cleanup, so it removes the flag extension it set from every transaction that
+// still carries it, leaving the ledger as it found it.
+function OnUninstall(): void {
+  const all = kasas.search("", 1000) as Transaction[];
+  for (const txn of all) {
+    if (txn.extensions && FLAG in txn.extensions) {
+      kasas.removeExtension(txn.id, FLAG);
+    }
+  }
+  kasas.log("info", "large-expense-alert removed its flags on uninstall");
 }

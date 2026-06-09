@@ -18,6 +18,11 @@ matches, it applies a `category` label.
 It requests no other access. It performs no filesystem, network, or process
 operations.
 
+## Uninstalling
+
+On `OnUninstall`, the plugin searches for transactions matching its keyword and
+removes the `category` label it applied, so uninstalling cleans up after itself.
+
 ## Configuration
 
 ```toml
