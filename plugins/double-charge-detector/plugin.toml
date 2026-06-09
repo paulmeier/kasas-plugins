@@ -1,0 +1,27 @@
+name        = "double-charge-detector"
+version     = "0.1.0"
+description = "Finds possible double charges: equal amounts at the same merchant within a configurable day window."
+author      = "kasas community"
+runtime     = "js"
+entrypoint  = "main.ts"
+
+# Registry-only metadata (the kasas host ignores these keys).
+license  = "MIT"
+homepage = "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/double-charge-detector"
+
+hooks        = ["OnTransactionCreate", "OnPageRender", "OnPageAction", "OnUninstall"]
+capabilities = ["transactions:read", "extensions:write", "ui:page"]
+
+# The dashboard page: a "Double Charges" sidebar entry at
+# /ext/double-charge-detector, rendered by OnPageRender below.
+[ui]
+title = "Double Charges"
+icon  = "flag"
+
+[config]
+# Two posted expenses with the same amount and merchant, this many days apart
+# (or fewer), count as a possible double charge.
+window_days = 3
+# Flag incoming duplicates automatically (OnTransactionCreate) with the
+# double_charge.suspect extension as they arrive.
+flag_new = true
