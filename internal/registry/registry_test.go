@@ -17,7 +17,7 @@ author      = "a"
 runtime     = "lua"
 license     = "MIT"
 homepage    = "https://example.com"
-hooks        = ["OnTransactionCreate"]
+hooks        = ["OnTransactionCreate", "OnUninstall"]
 capabilities = ["transactions:read", "labels:write"]
 `
 

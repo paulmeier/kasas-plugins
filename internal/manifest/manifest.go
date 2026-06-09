@@ -33,12 +33,18 @@ const (
 	HookTransactionCreate Hook = "OnTransactionCreate"
 	HookTransactionUpdate Hook = "OnTransactionUpdate"
 	HookSyncComplete      Hook = "OnSyncComplete"
+	// HookUninstall is a lifecycle hook (no triggering event) the host runs when a
+	// plugin is uninstalled, so the plugin can undo anything it created. Every
+	// community plugin must declare and implement it — cleanup is the plugin's
+	// responsibility, and a listed plugin must be cleanly removable.
+	HookUninstall Hook = "OnUninstall"
 )
 
 var knownHooks = map[Hook]bool{
 	HookTransactionCreate: true,
 	HookTransactionUpdate: true,
 	HookSyncComplete:      true,
+	HookUninstall:         true,
 }
 
 // Capability is a permission the host grants and enforces. These mirror the host's
@@ -167,10 +173,19 @@ func (m *Manifest) normalizeAndValidate() error {
 	if len(m.Hooks) == 0 {
 		return fmt.Errorf("plugin must declare at least one hook")
 	}
+	declaresUninstall := false
 	for _, h := range m.Hooks {
 		if !knownHooks[h] {
 			return fmt.Errorf("unknown hook %q (known: %s)", h, strings.Join(KnownHookNames(), ", "))
 		}
+		if h == HookUninstall {
+			declaresUninstall = true
+		}
+	}
+	// Every community plugin must clean up after itself: the host runs OnUninstall at
+	// uninstall time, so a listed plugin is required to declare and implement it.
+	if !declaresUninstall {
+		return fmt.Errorf("plugin must declare the %q hook (and implement it) so it can clean up when uninstalled", HookUninstall)
 	}
 	for _, c := range m.Capabilities {
 		if !knownCapabilities[c] {

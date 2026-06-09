@@ -40,7 +40,7 @@ author opens PR  ──►  Validate workflow (the gate)  ──►  merged to m
 Submissions are gated by **language**, because the safe-and-confident bar differs by
 runtime. Both runtimes share structural rules (single self-contained source file, a
 README, no nested dirs / symlinks / binaries, size limits, semver + license +
-homepage metadata); on top of that:
+homepage metadata, and a required `OnUninstall` cleanup hook); on top of that:
 
 | Runtime | Language-specific gating |
 | ------- | ------------------------ |

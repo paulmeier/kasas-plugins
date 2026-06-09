@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-09T13:30:31.410762789Z",
+  "generated_at": "2026-06-09T16:55:33.274145208Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
       "name": "coffee-budget",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": "Labels transactions whose description matches a keyword (default: coffee).",
       "author": "kasas community",
       "license": "MIT",
@@ -14,7 +14,8 @@
       "entrypoint": "main.lua",
       "hooks": [
         "OnTransactionCreate",
-        "OnTransactionUpdate"
+        "OnTransactionUpdate",
+        "OnUninstall"
       ],
       "capabilities": [
         "transactions:read",
@@ -25,26 +26,26 @@
       "files": [
         {
           "path": "README.md",
-          "sha256": "3cd26b9f960792f396a2f0c96c2ff74d7fccc61841cad3f309dd97d5526f3e55",
-          "size": 776
+          "sha256": "87936c4c927b675f2e08661e1bd6fc7113a3299585b8b7a900e1160456f94a0a",
+          "size": 955
         },
         {
           "path": "main.lua",
-          "sha256": "2573ea0ad0a1ad7882228ee2bca6e3fcb8ed57df8c8a911a62afb8b23b3ea09f",
-          "size": 823
+          "sha256": "aa0ba215d68deac6facf57fede519640ac808e32967f93696849444f1f37113a",
+          "size": 1299
         },
         {
           "path": "plugin.toml",
-          "sha256": "5d82d76a6192e341dcab875c409c20c02bb40b86e05f0fadd2f45e1ac2cf168c",
-          "size": 552
+          "sha256": "312170875c8cb2e122782130370f6457a307ed85dadf7c42e711caf8b9f72f64",
+          "size": 567
         }
       ],
-      "content_hash": "sha256:91ef32b70e419b1c41b5fd888e98df43e7f7ef5a030361ae8f4901c2472f4191",
-      "size_bytes": 2151
+      "content_hash": "sha256:1ca83f6776c33618c42602d92803ead56d908674ae640205ff3bba195b8775c9",
+      "size_bytes": 2821
     },
     {
       "name": "large-expense-alert",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Flags transactions whose amount exceeds a configurable threshold.",
       "author": "kasas community",
       "license": "Apache-2.0",
@@ -52,9 +53,11 @@
       "runtime": "js",
       "entrypoint": "main.ts",
       "hooks": [
-        "OnTransactionCreate"
+        "OnTransactionCreate",
+        "OnUninstall"
       ],
       "capabilities": [
+        "transactions:read",
         "extensions:write"
       ],
       "capability_tier": "write",
@@ -62,22 +65,22 @@
       "files": [
         {
           "path": "README.md",
-          "sha256": "1338942c1ab546275c5c319bf05efcad06c5aa5c5adff471e73d38dd0f0f42a7",
-          "size": 1009
+          "sha256": "dc81daea70f5a21997fe9f55a41520c9e3015d1709e75cd01b5d3705f6a099c1",
+          "size": 1229
         },
         {
           "path": "main.ts",
-          "sha256": "7e393f5139deaa3b82c2775a7b688d92db24cd611e51df59a7c4fda36188df43",
-          "size": 1718
+          "sha256": "a465da5f7ee028ad3c5fcbd88586aea9ac22bd627ef77a55a14c34cccc013ca1",
+          "size": 2288
         },
         {
           "path": "plugin.toml",
-          "sha256": "414aeda14d2770fab10a9c83d195714941edef10d2eee7d30bb2a081a13f77cb",
-          "size": 573
+          "sha256": "4549cbc1c98ba205b22c7abd724e66a98d604f74812b5cc25c949b4fdc597481",
+          "size": 609
         }
       ],
-      "content_hash": "sha256:556c216a4a0d993f2a1bb99c7d8a45b81b579344270bb7a4486ae680e5e9252c",
-      "size_bytes": 3300
+      "content_hash": "sha256:1a4bc9bc5de966ab481a5589f062d3fabf9fed86ee6cbd6a25621b0376f304cc",
+      "size_bytes": 4126
     }
   ]
 }

@@ -21,3 +21,14 @@ end
 function OnTransactionUpdate(txn)
   classify(txn)
 end
+
+-- OnUninstall runs once when the plugin is uninstalled. This plugin is responsible
+-- for undoing what it created, so it removes the category label from the
+-- transactions it would have matched, leaving no trace behind.
+function OnUninstall()
+  local matches = kasas.search(kasas.config.keyword, 1000)
+  for _, txn in ipairs(matches) do
+    kasas.remove_labels(txn.id, { "category" })
+  end
+  kasas.log("info", "coffee-budget removed its category labels on uninstall")
+end

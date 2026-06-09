@@ -1,5 +1,5 @@
 name        = "large-expense-alert"
-version     = "0.2.0"
+version     = "0.3.0"
 description = "Flags transactions whose amount exceeds a configurable threshold."
 author      = "kasas community"
 runtime     = "js"
@@ -9,8 +9,8 @@ entrypoint  = "main.ts"
 license  = "Apache-2.0"
 homepage = "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/large-expense-alert"
 
-hooks        = ["OnTransactionCreate"]
-capabilities = ["extensions:write"]
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["transactions:read", "extensions:write"]
 
 [config]
 # Flag any expense (negative amount) larger than this absolute value.

@@ -25,6 +25,7 @@ via `go run ./cmd/kasas-plugins validate` — run it before opening the PR.
 - [ ] The plugin lives in `plugins/<name>/` and `<name>` matches `name` in `plugin.toml`.
 - [ ] `plugin.toml` declares `version` (semver), `description`, `author`, `license`, and `homepage`.
 - [ ] There is a `README.md` explaining what the plugin does and why it needs each capability.
+- [ ] The plugin declares and implements the required **`OnUninstall`** hook to clean up anything it creates.
 - [ ] The plugin is a **single source file** (the entrypoint) plus the manifest and README — no extra modules, no `node_modules`, no binaries.
 - [ ] It uses **only** the `kasas` host API — no filesystem, network, `os`/`io`, `eval`, `require`/`import`, or `process`.
 - [ ] I ran `go run ./cmd/kasas-plugins validate plugins/<name>` and it passes.

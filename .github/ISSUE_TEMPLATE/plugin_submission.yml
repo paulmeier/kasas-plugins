@@ -51,6 +51,8 @@ body:
       options:
         - label: "It is a single self-contained source file (no extra modules, no node_modules, no binaries)."
           required: true
+        - label: "It declares and implements the required OnUninstall hook to clean up what it creates."
+          required: true
         - label: "It uses only the kasas host API — no filesystem, network, os/io, eval, require/import, or process."
           required: true
         - label: "I am the author or have the right to submit it under a permissive license (see CONTRIBUTING.md)."

@@ -18,7 +18,7 @@ surfaced to reviewers). A plugin is listed only if it has zero errors.
 | Code | Rule |
 | ---- | ---- |
 | `manifest.missing` | `plugin.toml` must exist and be readable. |
-| `manifest.invalid` | `plugin.toml` must parse and satisfy every field rule in [plugin-spec.md](plugin-spec.md). |
+| `manifest.invalid` | `plugin.toml` must parse and satisfy every field rule in [plugin-spec.md](plugin-spec.md), **including declaring the required `OnUninstall` hook**. |
 | `manifest.name_mismatch` | `name` must equal the directory name. |
 | `tree.entrypoint_missing` | The declared `entrypoint` file must exist. |
 | `tree.readme_missing` | A `README.md` must be present. |
