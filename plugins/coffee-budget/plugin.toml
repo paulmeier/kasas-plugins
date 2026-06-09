@@ -1,0 +1,17 @@
+name        = "coffee-budget"
+version     = "0.1.0"
+description = "Labels transactions whose description matches a keyword (default: coffee)."
+author      = "kasas community"
+runtime     = "lua"
+entrypoint  = "main.lua"
+
+# Registry-only metadata (the kasas host ignores these keys).
+license  = "MIT"
+homepage = "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/coffee-budget"
+
+hooks        = ["OnTransactionCreate", "OnTransactionUpdate"]
+capabilities = ["transactions:read", "labels:write"]
+
+[config]
+keyword  = "coffee"
+category = "food"

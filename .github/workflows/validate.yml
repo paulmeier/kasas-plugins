@@ -1,0 +1,79 @@
+name: Validate
+
+# The submission gate. Every PR (and every push to main) must pass:
+#   - the Go tooling's own format/vet/test/build,
+#   - the plugin gate over every plugin (manifest + per-runtime security checks),
+#   - luacheck over Lua plugins (the complementary syntax/lint pass),
+#   - a check that the committed registry index is current.
+# A plugin that does not clear all of these is never listed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tooling:
+    name: Tooling (fmt, vet, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "::error::These files are not gofmt-formatted: $files"
+            gofmt -d .
+            exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test -race ./...
+      - name: build
+        run: go build -o bin/kasas-plugins ./cmd/kasas-plugins
+
+  gate:
+    name: Plugin gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Gate all plugins
+        run: go run ./cmd/kasas-plugins validate
+      - name: Verify registry index is current
+        run: go run ./cmd/kasas-plugins index --check
+
+  luacheck:
+    name: Luacheck (Lua plugins)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks
+          sudo luarocks install luacheck
+      - name: Run luacheck
+        run: |
+          shopt -s nullglob
+          files=(plugins/*/*.lua)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No Lua plugins to check."
+            exit 0
+          fi
+          luacheck "${files[@]}"

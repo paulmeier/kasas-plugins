@@ -1,0 +1,7 @@
+# Build output
+/bin/
+/_site/
+
+# Go workspace files
+go.work
+go.work.sum

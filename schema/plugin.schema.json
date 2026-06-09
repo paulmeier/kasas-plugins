@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/paulmeier/kasas-plugins/main/schema/plugin.schema.json",
+  "title": "kasas community plugin manifest",
+  "description": "Schema for plugin.toml. Editors that support TOML schemas (e.g. taplo) can validate against this; the authoritative validator is `kasas-plugins validate`.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["name", "version", "description", "author", "runtime", "hooks", "license", "homepage"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "Lowercase slug; must equal the plugin's directory name."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-.]+)?(?:\\+[0-9A-Za-z-.]+)?$",
+      "description": "Semantic version MAJOR.MINOR.PATCH."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 200
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["lua", "js"]
+    },
+    "entrypoint": {
+      "type": "string",
+      "pattern": "^[^/\\\\]+$",
+      "description": "Filename inside the plugin directory; defaults to main.lua / main.js."
+    },
+    "license": {
+      "type": "string",
+      "enum": ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT", "MPL-2.0", "Unlicense"]
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "hooks": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["OnTransactionCreate", "OnTransactionUpdate", "OnSyncComplete"]
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["transactions:read", "labels:write", "extensions:write"]
+      }
+    },
+    "config": {
+      "type": "object",
+      "description": "Arbitrary configuration exposed to the plugin as kasas.config."
+    }
+  }
+}
