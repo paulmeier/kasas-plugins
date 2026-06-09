@@ -51,22 +51,44 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "enum": ["OnTransactionCreate", "OnTransactionUpdate", "OnSyncComplete", "OnUninstall"]
+        "enum": ["OnTransactionCreate", "OnTransactionUpdate", "OnSyncComplete", "OnUninstall", "OnPageRender", "OnPageAction"]
       },
       "contains": { "const": "OnUninstall" },
-      "description": "Must include the required OnUninstall lifecycle hook."
+      "description": "Must include the required OnUninstall lifecycle hook. OnPageRender/OnPageAction require a [ui] block and the ui:page capability."
     },
     "capabilities": {
       "type": "array",
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "enum": ["transactions:read", "labels:write", "extensions:write"]
+        "enum": ["transactions:read", "labels:write", "extensions:write", "ui:page"]
       }
     },
     "config": {
       "type": "object",
       "description": "Arbitrary configuration exposed to the plugin as kasas.config."
+    },
+    "ui": {
+      "type": "object",
+      "description": "Declares the plugin's dashboard page (requires the OnPageRender hook and the ui:page capability).",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "description": "Sidebar label and default page heading."
+        },
+        "icon": {
+          "type": "string",
+          "enum": ["bell", "calendar", "chart", "coin", "flag", "gauge", "heart", "list", "puzzle", "star"],
+          "description": "Curated sidebar icon name; defaults to puzzle."
+        }
+      }
     }
+  },
+  "dependentRequired": {
+    "ui": ["capabilities"]
   }
 }

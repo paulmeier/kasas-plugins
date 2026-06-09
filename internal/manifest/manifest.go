@@ -38,6 +38,12 @@ const (
 	// community plugin must declare and implement it — cleanup is the plugin's
 	// responsibility, and a listed plugin must be cleanly removable.
 	HookUninstall Hook = "OnUninstall"
+	// HookPageRender / HookPageAction back a plugin's dashboard page (the [ui]
+	// block): request-driven hooks that RETURN a declarative page document the
+	// host validates and the dashboard renders. They come as a unit with [ui]
+	// and the ui:page capability (see validateUI).
+	HookPageRender Hook = "OnPageRender"
+	HookPageAction Hook = "OnPageAction"
 )
 
 var knownHooks = map[Hook]bool{
@@ -45,6 +51,8 @@ var knownHooks = map[Hook]bool{
 	HookTransactionUpdate: true,
 	HookSyncComplete:      true,
 	HookUninstall:         true,
+	HookPageRender:        true,
+	HookPageAction:        true,
 }
 
 // Capability is a permission the host grants and enforces. These mirror the host's
@@ -56,13 +64,38 @@ const (
 	CapTransactionsRead Capability = "transactions:read"
 	CapLabelsWrite      Capability = "labels:write"
 	CapExtensionsWrite  Capability = "extensions:write"
+	// CapUIPage lets a plugin expose a dashboard page (a sidebar entry plus a
+	// declaratively rendered page). It mutates nothing itself, but it puts
+	// plugin-authored content in front of the user, so the gate surfaces it.
+	CapUIPage Capability = "ui:page"
 )
 
 var knownCapabilities = map[Capability]bool{
 	CapTransactionsRead: true,
 	CapLabelsWrite:      true,
 	CapExtensionsWrite:  true,
+	CapUIPage:           true,
 }
+
+// knownUIIcons is the curated sidebar icon set, mirroring the host
+// (kasas/internal/plugins/manifest.go). Icons are picked by NAME only — the
+// dashboard owns the SVG bytes — so a plugin can never inject markup through
+// its sidebar entry.
+var knownUIIcons = map[string]bool{
+	"bell":     true,
+	"calendar": true,
+	"chart":    true,
+	"coin":     true,
+	"flag":     true,
+	"gauge":    true,
+	"heart":    true,
+	"list":     true,
+	"puzzle":   true,
+	"star":     true,
+}
+
+// maxUITitleLen bounds the sidebar label, matching the host.
+const maxUITitleLen = 40
 
 // Runtime values accepted by the host. Each gates a different language-specific
 // security pass in the gate package.
@@ -125,9 +158,21 @@ type Manifest struct {
 	Capabilities []Capability   `toml:"capabilities"`
 	Config       map[string]any `toml:"config"`
 
+	// UI, when present, declares the plugin's dashboard page (a sidebar entry
+	// routing to /ext/<name>, rendered by the OnPageRender hook). Read by the
+	// host; mirrored here so the gate enforces the same unit rule.
+	UI *UIManifest `toml:"ui"`
+
 	// Registry-only metadata (ignored by the host).
 	License  string `toml:"license"`
 	Homepage string `toml:"homepage"`
+}
+
+// UIManifest is the optional [ui] block: the sidebar label and a curated icon
+// name (defaulting to "puzzle").
+type UIManifest struct {
+	Title string `toml:"title"`
+	Icon  string `toml:"icon"`
 }
 
 // Parse decodes and validates a plugin.toml under the registry's strict rules,
@@ -192,6 +237,9 @@ func (m *Manifest) normalizeAndValidate() error {
 			return fmt.Errorf("unknown capability %q (known: %s)", c, strings.Join(KnownCapabilityNames(), ", "))
 		}
 	}
+	if err := m.validateUI(); err != nil {
+		return err
+	}
 
 	// --- Registry-only metadata (stricter than the host) ---
 	if !semverRE.MatchString(m.Version) {
@@ -211,6 +259,58 @@ func (m *Manifest) normalizeAndValidate() error {
 	}
 	if err := validateHomepage(m.Homepage); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateUI enforces the host's dashboard-page unit rule: the [ui] block, the
+// OnPageRender hook, and the ui:page capability come together or not at all, so
+// a listed plugin can never ship a sidebar entry without a renderer (or page
+// hooks the host would refuse to load).
+func (m *Manifest) validateUI() error {
+	declares := func(h Hook) bool {
+		for _, x := range m.Hooks {
+			if x == h {
+				return true
+			}
+		}
+		return false
+	}
+	requests := func(c Capability) bool {
+		for _, x := range m.Capabilities {
+			if x == c {
+				return true
+			}
+		}
+		return false
+	}
+
+	if m.UI == nil {
+		if declares(HookPageRender) || declares(HookPageAction) {
+			return fmt.Errorf("hooks %s/%s require a [ui] block", HookPageRender, HookPageAction)
+		}
+		if requests(CapUIPage) {
+			return fmt.Errorf("capability %q requires a [ui] block", CapUIPage)
+		}
+		return nil
+	}
+
+	m.UI.Title = strings.TrimSpace(m.UI.Title)
+	m.UI.Icon = strings.TrimSpace(m.UI.Icon)
+	if m.UI.Title == "" || len(m.UI.Title) > maxUITitleLen {
+		return fmt.Errorf("ui.title is required and must be at most %d characters", maxUITitleLen)
+	}
+	if m.UI.Icon == "" {
+		m.UI.Icon = "puzzle"
+	}
+	if !knownUIIcons[m.UI.Icon] {
+		return fmt.Errorf("unknown ui.icon %q (supported: %s)", m.UI.Icon, KnownUIIconNames())
+	}
+	if !declares(HookPageRender) {
+		return fmt.Errorf("a [ui] block requires the %s hook", HookPageRender)
+	}
+	if !requests(CapUIPage) {
+		return fmt.Errorf("a [ui] block requires the %q capability", CapUIPage)
 	}
 	return nil
 }
@@ -274,6 +374,17 @@ func KnownCapabilityNames() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// KnownUIIconNames returns the curated icon names as a sorted, comma-joined
+// string for error messages and docs.
+func KnownUIIconNames() string {
+	out := make([]string, 0, len(knownUIIcons))
+	for n := range knownUIIcons {
+		out = append(out, n)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
 }
 
 // AllowedLicenses returns the SPDX allowlist as a sorted, comma-joined string.

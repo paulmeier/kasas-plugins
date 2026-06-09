@@ -45,6 +45,7 @@ category = "food"
 | `license` | yes | SPDX id from the allowlist (below). *Registry-only.* |
 | `homepage` | yes | `https://` URL. *Registry-only.* |
 | `[config]` | no | Arbitrary table exposed to the plugin as `kasas.config`. |
+| `[ui]` | no | Declares a [dashboard page](#dashboard-pages-ui): `title` (≤40 chars) and an optional curated `icon` name. Requires the `OnPageRender` hook and the `ui:page` capability. |
 
 Unknown keys are tolerated (the host ignores them), but don't rely on them — they
 carry no meaning to either the host or the registry.
@@ -62,6 +63,8 @@ function for each.
 | `OnTransactionUpdate` | event | `transaction.updated` | the transaction |
 | `OnSyncComplete` | event | `sync.completed` | a sync summary |
 | `OnUninstall` | lifecycle | uninstall (no event) | none |
+| `OnPageRender` | request | viewing the plugin's [dashboard page](#dashboard-pages-ui) | a page request; **returns** a page document |
+| `OnPageAction` | request | a button press on the page | a page request with `action`/`params`; **returns** a page document |
 
 **`OnUninstall` is required.** Every plugin must declare and implement it so it can
 clean up anything it created (labels, extensions) when removed — cleanup is the
@@ -85,9 +88,66 @@ A capability is a permission the host enforces at the `kasas` API boundary.
 | `transactions:read` | `kasas.get_transaction`, `kasas.search` | read-only |
 | `labels:write` | `kasas.apply_labels`, `kasas.remove_labels` | **write** |
 | `extensions:write` | `kasas.set_extension`, `kasas.remove_extension` | **write** |
+| `ui:page` | a [dashboard page](#dashboard-pages-ui) (sidebar entry + rendered page) | read-only* |
 
 `kasas.log(...)` and `kasas.config` are always available and need no capability.
 A **write** capability requires maintainer sign-off (see CONTRIBUTING.md).
+\* `ui:page` itself mutates nothing — a page can only show what the plugin's other
+capabilities let it read, and its actions write only through those capabilities —
+but the gate surfaces it as a finding so reviewers look at what the page shows
+and does.
+
+## Dashboard pages (`[ui]`)
+
+A plugin with a `[ui]` block contributes its **own sidebar entry and page** to
+the kasas dashboard (at `/ext/<name>`), without shipping any frontend code. The
+`OnPageRender` hook **returns a declarative page document** — a `title` plus a
+list of typed blocks — which the host validates, bounds-checks, and renders with
+its own components. Plugin strings are always treated as text (no markup, no
+scripts). The `[ui]` block, the `OnPageRender` hook, and the `ui:page` capability
+are a unit: a manifest with any of the three missing is rejected.
+
+```toml
+hooks        = ["OnPageRender", "OnPageAction", "OnUninstall"]
+capabilities = ["transactions:read", "ui:page"]
+
+[ui]
+title = "Coffee Budget"  # sidebar label, ≤40 chars
+icon  = "coin"           # one of: bell, calendar, chart, coin, flag, gauge,
+                         #         heart, list, puzzle (default), star
+```
+
+```lua
+function OnPageRender(req)   -- req.plugin, req.action (""), req.params
+  return {
+    title = "Coffee Budget",
+    blocks = {
+      { type = "stat", label = "Matches", value = 42, hint = "this month" },
+      { type = "keyvalue", items = { { key = "Keyword", value = "coffee" } } },
+      { type = "table", columns = { "Description", "Amount" }, rows = { { "Latte", "-4.50" } } },
+      { type = "actions", actions = { { id = "relabel", label = "Re-label", style = "primary" } } },
+    },
+  }
+end
+
+function OnPageAction(req)   -- req.action == "relabel"
+  -- mutate (within your granted capabilities), then re-render:
+  return OnPageRender(req)
+end
+```
+
+**Block types:** `heading`/`text` (`text`), `stat` (`label`, `value`, `hint?`),
+`keyvalue` (`items` of `{key, value}`), `table` (`columns`, `rows`), `actions`
+(`{id, label, style?, params?}` buttons routed to `OnPageAction`), `divider`.
+Scalar values may be strings, numbers, or booleans (normalized to strings).
+Documents are bounded (≤256 KiB, ≤200 blocks, ≤1000 table rows) and an unknown
+block type is a render error.
+
+**Contract:** treat `OnPageRender` as read-only — it runs on every page view
+(read-tier API). Put mutations in `OnPageAction` (write-tier API). Both run under
+the host's per-hook timeout, serialized with your event hooks. See the
+[host docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#dashboard-pages)
+for the full schema and API surface.
 
 ## License allowlist
 

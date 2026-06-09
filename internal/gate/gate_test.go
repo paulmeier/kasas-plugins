@@ -309,3 +309,68 @@ capabilities=["transactions:read"]
 		t.Fatalf("expected read-only tier, got %q", r.CapabilityTier)
 	}
 }
+
+// TestUIPagePluginPasses checks a plugin with a dashboard page passes the gate,
+// stays read-only-tiered when its other capabilities are reads, and surfaces the
+// ui-page advisory finding for reviewers.
+func TestUIPagePluginPasses(t *testing.T) {
+	mf := `
+name="pager"
+version="1.0.0"
+description="shows a dashboard page"
+author="a"
+runtime="lua"
+license="MIT"
+homepage="https://example.com"
+hooks=["OnPageRender","OnPageAction","OnUninstall"]
+capabilities=["transactions:read","ui:page"]
+[ui]
+title="Pager"
+icon="chart"
+`
+	dir := writePlugin(t, "pager", map[string]string{
+		"plugin.toml": mf,
+		"main.lua": `function OnPageRender(req) return { blocks = { { type = "text", text = "hi" } } } end
+function OnPageAction(req) return OnPageRender(req) end
+function OnUninstall() end
+`,
+		"README.md": "# pager\n",
+	})
+	r := CheckPlugin(dir, DefaultLimits())
+	if !r.OK() {
+		t.Fatalf("expected pass, got %v", r.Errors())
+	}
+	if r.CapabilityTier != TierReadOnly {
+		t.Fatalf("ui:page alone must not raise the tier; got %q", r.CapabilityTier)
+	}
+	if !hasCode(r, "cap.ui_page") {
+		t.Fatalf("expected the cap.ui_page advisory finding, got %v", r.Findings)
+	}
+}
+
+// TestUIBlockWithoutHookRejected checks the manifest unit rule is enforced at
+// the gate (a sidebar entry with no renderer can never be listed).
+func TestUIBlockWithoutHookRejected(t *testing.T) {
+	mf := `
+name="pager"
+version="1.0.0"
+description="shows a dashboard page"
+author="a"
+runtime="lua"
+license="MIT"
+homepage="https://example.com"
+hooks=["OnTransactionCreate","OnUninstall"]
+capabilities=["ui:page"]
+[ui]
+title="Pager"
+`
+	dir := writePlugin(t, "pager", map[string]string{
+		"plugin.toml": mf,
+		"main.lua":    "function OnTransactionCreate(t) end\nfunction OnUninstall() end\n",
+		"README.md":   "# pager\n",
+	})
+	r := CheckPlugin(dir, DefaultLimits())
+	if r.OK() || !hasCode(r, "manifest.invalid") {
+		t.Fatalf("expected manifest.invalid, got %v", r.Findings)
+	}
+}
