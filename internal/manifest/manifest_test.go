@@ -26,22 +26,52 @@ func TestParseValid(t *testing.T) {
 }
 
 func TestParseDefaultsEntrypoint(t *testing.T) {
-	src := `
+	for runtime, want := range map[string]string{
+		"lua":  "main.lua",
+		"js":   "main.js",
+		"wasm": "main.wasm",
+	} {
+		t.Run(runtime, func(t *testing.T) {
+			src := `
 name        = "p"
 version     = "0.0.1"
 description = "twelve chars."
 author      = "a"
-runtime     = "js"
+runtime     = "` + runtime + `"
 license     = "MIT"
 homepage    = "https://example.com"
 hooks        = ["OnSyncComplete", "OnUninstall"]
 `
+			m, err := Parse([]byte(src))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if m.Entrypoint != want {
+				t.Fatalf("expected entrypoint to default to %q, got %q", want, m.Entrypoint)
+			}
+		})
+	}
+}
+
+func TestParseWasmManifest(t *testing.T) {
+	src := `
+name        = "go-budget"
+version     = "1.0.0"
+description = "A plugin compiled to WebAssembly."
+author      = "someone"
+runtime     = "wasm"
+entrypoint  = "main.wasm"
+license     = "MIT"
+homepage    = "https://example.com/go-budget"
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["transactions:read", "labels:write"]
+`
 	m, err := Parse([]byte(src))
 	if err != nil {
-		t.Fatalf("parse: %v", err)
+		t.Fatalf("expected valid wasm manifest, got error: %v", err)
 	}
-	if m.Entrypoint != "main.js" {
-		t.Fatalf("expected entrypoint to default to main.js, got %q", m.Entrypoint)
+	if m.Runtime != RuntimeWasm || m.Entrypoint != "main.wasm" {
+		t.Fatalf("unexpected parse result: %+v", m)
 	}
 }
 

@@ -17,11 +17,15 @@ and its **only** path to your data is the capability-checked `kasas` host API. R
 the host documentation first:
 <https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md>.
 
-Two runtimes are supported:
+Three runtimes are supported:
 
 - **Lua** (`runtime = "lua"`)
 - **JavaScript / TypeScript** (`runtime = "js"`; TypeScript types are stripped at
   load by esbuild — no build step)
+- **WASM** (`runtime = "wasm"`; a compiled WASI preview1 reactor module — for Go,
+  build with `GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared` against the
+  [kasas plugin SDK](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#go-wasm);
+  any language that targets `wasip1` can implement the ABI)
 
 ## 2. Lay out your plugin
 
@@ -30,17 +34,19 @@ Create exactly this under `plugins/<name>/`:
 ```text
 plugins/<name>/
   plugin.toml     # manifest (required)
-  main.lua        # or main.js / main.ts — the single source entrypoint (required)
+  main.lua        # or main.js / main.ts / main.wasm — the single entrypoint (required)
   README.md       # what it does and why it needs each capability (required)
 ```
 
 - `<name>` is a lowercase slug (`^[a-z0-9][a-z0-9_-]*$`) and **must equal** the
   `name` in `plugin.toml`.
-- A plugin is a **single self-contained source file**. The host loads only the
-  entrypoint — there is no `require`/`import`, no `node_modules`, no second module.
-- No binaries, archives, lockfiles, nested directories, or symlinks. Allowed
-  companions are `README.md`, `*.md`, `LICENSE`/`*.txt`, `*.json` fixtures, and a
-  `*.d.ts` ambient-types file for editor support.
+- A plugin is a **single self-contained entrypoint** — a source file, or one
+  compiled module for `wasm`. The host loads only the entrypoint — there is no
+  `require`/`import`, no `node_modules`, no second module.
+- No binaries (other than a wasm plugin's `.wasm` entrypoint), archives,
+  lockfiles, nested directories, or symlinks. Allowed companions are `README.md`,
+  `*.md`, `LICENSE`/`*.txt`, `*.json` fixtures, and a `*.d.ts` ambient-types file
+  for editor support.
 
 See [`docs/plugin-spec.md`](docs/plugin-spec.md) for the full manifest reference and
 [`docs/submission-guidelines.md`](docs/submission-guidelines.md) for every gate rule.
@@ -52,8 +58,8 @@ name        = "my-plugin"            # == directory name
 version     = "1.0.0"                # semver
 description = "A clear one-liner."   # 12–200 chars
 author      = "you or your handle"
-runtime     = "lua"                  # or "js"
-entrypoint  = "main.lua"             # defaults: main.lua / main.js
+runtime     = "lua"                  # or "js" / "wasm"
+entrypoint  = "main.lua"             # defaults: main.lua / main.js / main.wasm
 
 license  = "MIT"                     # SPDX, from the allowlist (see spec)
 homepage  = "https://github.com/you/my-plugin"   # https
@@ -88,6 +94,12 @@ The gate **rejects** any use of an escape hatch, per runtime:
 - **JS/TS:** `eval`, `new Function` / `Function(...)`, `require(...)`, `import`,
   `process`, `globalThis`, `fetch`, `XMLHttpRequest`, `WebSocket`, `WebAssembly`,
   `Worker`, `__proto__`, `constructor.constructor`, Node/Deno/Bun globals.
+- **WASM:** there is no source to scan, so the gate verifies the compiled module
+  instead: it must compile with the same wazero the host uses, import **only**
+  from the `kasas` host module and `wasi_snapshot_preview1` (which the host runs
+  with no preopened directories and no sockets), and export the ABI surface
+  (`_initialize`, `kasas_describe`, your declared hooks, and its memory). The
+  module is never executed by the gate.
 
 These aren't merely discouraged — the host removes them, so using one would fail at
 runtime anyway. Do all of your work through the `kasas` host API.

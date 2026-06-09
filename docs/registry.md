@@ -30,7 +30,7 @@ plugins in the repo, so the raw endpoint is authoritative.
       "author": "kasas community",
       "license": "MIT",
       "homepage": "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/coffee-budget",
-      "runtime": "lua",                       // "lua" | "js"
+      "runtime": "lua",                       // "lua" | "js" | "wasm"
       "entrypoint": "main.lua",
       "hooks": ["OnTransactionCreate", "OnTransactionUpdate"],
       "capabilities": ["transactions:read", "labels:write"],
