@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-09T21:47:35.657993728Z",
+  "generated_at": "2026-06-09T22:25:07.192381371Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
@@ -49,6 +49,52 @@
       ],
       "content_hash": "sha256:f6f0674f92b45280d85d68441455c3121261a2b446556b88c32865b764bf76eb",
       "size_bytes": 6989
+    },
+    {
+      "name": "double-charge-detector",
+      "version": "0.1.0",
+      "description": "Finds possible double charges: equal amounts at the same merchant within a configurable day window.",
+      "author": "kasas community",
+      "license": "MIT",
+      "homepage": "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/double-charge-detector",
+      "runtime": "js",
+      "entrypoint": "main.ts",
+      "hooks": [
+        "OnTransactionCreate",
+        "OnPageRender",
+        "OnPageAction",
+        "OnUninstall"
+      ],
+      "capabilities": [
+        "transactions:read",
+        "extensions:write",
+        "ui:page"
+      ],
+      "capability_tier": "write",
+      "ui": {
+        "title": "Double Charges",
+        "icon": "flag"
+      },
+      "path": "plugins/double-charge-detector",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "7ab1ad9117ae89325e4391a0c1d867f6cfbeb13bbc4e1ce52f9a44e15948b488",
+          "size": 2572
+        },
+        {
+          "path": "main.ts",
+          "sha256": "90f405d3a26fa5c362a8a519942a3a8f81c34ba0548d503d102a3ac54f26412d",
+          "size": 9359
+        },
+        {
+          "path": "plugin.toml",
+          "sha256": "6e088418185fe14d78b6d02ef6c600e7c5d7b69bc8a0da120f3eae7a28a960d0",
+          "size": 1042
+        }
+      ],
+      "content_hash": "sha256:0084f19e3ad478f80136b379fe3bbedf1448da37bf5a3e0dd18ffea37790634e",
+      "size_bytes": 12973
     },
     {
       "name": "large-expense-alert",

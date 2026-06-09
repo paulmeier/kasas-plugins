@@ -25,9 +25,11 @@ author opens PR  ──►  Validate workflow (the gate)  ──►  merged to m
 
 - **`plugins/<name>/`** — one directory per plugin: a `plugin.toml` manifest, a
   single source entrypoint, and a `README.md`. See
-  [`plugins/coffee-budget`](plugins/coffee-budget) (Lua) and
-  [`plugins/large-expense-alert`](plugins/large-expense-alert) (TypeScript) for
-  templates.
+  [`plugins/coffee-budget`](plugins/coffee-budget) (Lua, with a dashboard page +
+  settings form), [`plugins/large-expense-alert`](plugins/large-expense-alert)
+  (TypeScript), and
+  [`plugins/double-charge-detector`](plugins/double-charge-detector)
+  (TypeScript, with a dashboard page + settings form) for templates.
 - **The gate** (`cmd/kasas-plugins` + `internal/`) — Go tooling that validates the
   manifest and runs **language-specific** security checks, then generates the
   registry index. It is the single binary CI runs and the same one you run locally.
