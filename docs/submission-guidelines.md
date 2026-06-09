@@ -22,12 +22,12 @@ surfaced to reviewers). A plugin is listed only if it has zero errors.
 | `manifest.name_mismatch` | `name` must equal the directory name. |
 | `tree.entrypoint_missing` | The declared `entrypoint` file must exist. |
 | `tree.readme_missing` | A `README.md` must be present. |
-| `tree.extra_source` | Only the entrypoint may be a source file of the runtime's language — the host loads no other modules. |
+| `tree.extra_source` | Only the entrypoint may be a file of the runtime's language (`.lua`/`.js`/`.wasm`) — the host loads no other modules. |
 | `tree.nested_dir` | A plugin is a single flat directory; no subdirectories (this also blocks `node_modules`, `.git`, …). |
 | `tree.symlink` | No symlinks. |
-| `tree.disallowed_file` | Only the entrypoint, `README.md`/`*.md`, `*.txt`, `*.toml`, `*.json`, and `*.d.ts` are allowed. No binaries/archives/scripts. |
-| `tree.file_too_large` | No single file over 256 KiB. |
-| `tree.too_large` | The whole plugin must be under 1 MiB. |
+| `tree.disallowed_file` | Only the entrypoint, `README.md`/`*.md`, `*.txt`, `*.toml`, `*.json`, and `*.d.ts` are allowed. No binaries/archives/scripts (a wasm plugin's compiled entrypoint is the one exception). |
+| `tree.file_too_large` | No single file over 256 KiB (a wasm entrypoint has its own budget instead — see the WASM rules). |
+| `tree.too_large` | The whole plugin must be under 1 MiB (not counting a wasm entrypoint, which has its own budget). |
 | `tree.too_many_files` | At most 32 files. |
 
 ## Lua rules (`runtime = "lua"`)
@@ -59,6 +59,31 @@ Do all work through the `kasas` table. The host opens only `base`, `table`,
 As with Lua, comments and string/template literals are stripped before scanning, so
 a banned word in a log message is fine. Write `.ts` if you want types — esbuild
 strips them at load; no build step or `node_modules`.
+
+## WASM rules (`runtime = "wasm"`)
+
+The entrypoint is a **compiled** WASI preview1 reactor module (for Go:
+`GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o main.wasm .` against the
+[kasas plugin SDK](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#go-wasm)).
+There is no source to scan, so the gate verifies the module's structure instead —
+each rule mirrors a check the host performs at load, and the module is **compiled,
+never instantiated or run**:
+
+| Code | Rule |
+| ---- | ---- |
+| `wasm.not_wasm` | The entrypoint must be a core WebAssembly module: the `"\0asm"` magic plus binary version 1 (not source, not a component-model binary). |
+| `wasm.entrypoint_too_large` | The compiled module must be under **8 MiB** (its own budget, separate from the per-file/total limits above — a standard-toolchain Go build is ~3.5 MiB). |
+| `wasm.compile_failed` | The module must compile with the same wazero the host uses, so "it loads" is proven at submission time. |
+| `wasm.unknown_import` | Every import must come from the `kasas` host module or `wasi_snapshot_preview1` — the only modules the host instantiates (and its WASI has no preopened dirs or sockets). Anything else cannot resolve at load. |
+| `wasm.missing_export` | The module must export `_initialize` (the reactor initializer), `kasas_describe` (the ABI handshake), and one function per declared hook. |
+| `wasm.bad_signature` | Hook exports take a single `i32` payload length; `_initialize` and `kasas_describe` take no parameters (ABI v1). |
+| `wasm.no_memory` | The module must export its linear memory (a wasip1 reactor exports it as `"memory"`) — the ABI moves JSON through it. |
+
+The SDK satisfies all of these automatically. Because reviewers cannot read a
+binary, wasm review leans on this structural verification, the capability
+sandbox (identical to Lua/JS — every host call is capability-checked), and the
+registry's content hashes; your README and `homepage` should link the module's
+source.
 
 ## Capability findings (advisory)
 

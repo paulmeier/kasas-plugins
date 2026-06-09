@@ -29,12 +29,12 @@
     },
     "runtime": {
       "type": "string",
-      "enum": ["lua", "js"]
+      "enum": ["lua", "js", "wasm"]
     },
     "entrypoint": {
       "type": "string",
       "pattern": "^[^/\\\\]+$",
-      "description": "Filename inside the plugin directory; defaults to main.lua / main.js."
+      "description": "Filename inside the plugin directory; defaults to main.lua / main.js / main.wasm."
     },
     "license": {
       "type": "string",

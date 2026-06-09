@@ -24,7 +24,8 @@ author opens PR  ──►  Validate workflow (the gate)  ──►  merged to m
 ```
 
 - **`plugins/<name>/`** — one directory per plugin: a `plugin.toml` manifest, a
-  single source entrypoint, and a `README.md`. See
+  single entrypoint (a source file, or a compiled wasm module), and a
+  `README.md`. See
   [`plugins/coffee-budget`](plugins/coffee-budget) (Lua, with a dashboard page +
   settings form), [`plugins/large-expense-alert`](plugins/large-expense-alert)
   (TypeScript), and
@@ -40,14 +41,15 @@ author opens PR  ──►  Validate workflow (the gate)  ──►  merged to m
 ## The submission gate
 
 Submissions are gated by **language**, because the safe-and-confident bar differs by
-runtime. Both runtimes share structural rules (single self-contained source file, a
-README, no nested dirs / symlinks / binaries, size limits, semver + license +
+runtime. All runtimes share structural rules (a single self-contained entrypoint, a
+README, no nested dirs / symlinks / stray binaries, size limits, semver + license +
 homepage metadata, and a required `OnUninstall` cleanup hook); on top of that:
 
 | Runtime | Language-specific gating |
 | ------- | ------------------------ |
 | **Lua** | Static scan rejecting every escape hatch the host strips (`os`, `io`, `require`, `load`/`loadstring`, `dofile`, `debug`, `_G`/`_ENV`, …). Plus `luacheck` in CI for syntax/lint. |
 | **JavaScript / TypeScript** | Static scan rejecting `eval`, the `Function` constructor, `require`/`import`, `process`, `fetch`/`XMLHttpRequest`/`WebSocket`, `WebAssembly`, `globalThis`, `__proto__`, … **and** a transpile with the *same esbuild* the host uses — so "it loads in kasas" is proven at submission time. |
+| **WASM** | Structural verification of the compiled module (never executed): it must compile with the *same wazero* the host uses, import only from the `kasas` host module and (preopen-less) WASI preview1, and export the ABI surface — `_initialize`, `kasas_describe`, every declared hook, and its memory. The module gets its own size budget (8 MiB) in place of the text-file limits. |
 
 Capabilities are risk-tiered: read-only plugins pass on the automated gate alone; any
 plugin that can **write** a user's data (`labels:write`, `extensions:write`) is

@@ -6,14 +6,17 @@
 // The gate runs in three layers:
 //
 //  1. Structural checks (this file): the plugin directory is well-formed — a valid
-//     manifest whose name matches the directory, a single declared source file, a
-//     README, no stray binaries / nested code / symlinks, and sane size limits.
-//  2. A language-specific static pass keyed on the manifest runtime (lua.go,
-//     js.go): the source is scanned for the escape hatches the host strips at load
-//     time. Using one of them is a guaranteed runtime failure in the host, so it is
-//     a hard rejection here rather than a surprise after install. The JS/TS pass
-//     additionally transpiles the entrypoint with the SAME esbuild the host uses,
-//     so "it loads" is proven at submission time.
+//     manifest whose name matches the directory, a single declared entrypoint, a
+//     README, no stray binaries / nested code / symlinks, and sane size limits (a
+//     wasm plugin's compiled entrypoint is the one allowed binary, with its own
+//     size budget).
+//  2. A runtime-specific static pass keyed on the manifest runtime (lua.go, js.go,
+//     wasm.go): lua/js source is scanned for the escape hatches the host strips at
+//     load time. Using one of them is a guaranteed runtime failure in the host, so
+//     it is a hard rejection here rather than a surprise after install. The JS/TS
+//     pass additionally transpiles the entrypoint with the SAME esbuild the host
+//     uses, and the wasm pass compiles the module with the SAME wazero the host
+//     uses (plus import/export checks), so "it loads" is proven at submission time.
 //  3. Capability risk tiering (capabilities.go): write capabilities are surfaced so
 //     a human reviewer (CODEOWNERS) signs off before a plugin that can mutate a
 //     user's ledger is listed.
@@ -103,14 +106,22 @@ type Limits struct {
 	MaxFileBytes  int64 // any single file
 	MaxTotalBytes int64 // whole plugin directory
 	MaxFiles      int   // entries in the directory tree
+
+	// MaxWasmEntrypointBytes is the separate budget for a wasm plugin's compiled
+	// entrypoint module, which is a binary several times larger than any source
+	// file (a standard-toolchain Go build against the host SDK is ~3.5 MiB). The
+	// module is exempt from MaxFileBytes and does not count toward MaxTotalBytes;
+	// everything else in the plugin still obeys the normal limits.
+	MaxWasmEntrypointBytes int64
 }
 
 // DefaultLimits are applied when CheckPlugin is called without overrides.
 func DefaultLimits() Limits {
 	return Limits{
-		MaxFileBytes:  256 * 1024,      // 256 KiB
-		MaxTotalBytes: 1 * 1024 * 1024, // 1 MiB
-		MaxFiles:      32,
+		MaxFileBytes:           256 * 1024,      // 256 KiB
+		MaxTotalBytes:          1 * 1024 * 1024, // 1 MiB
+		MaxFiles:               32,
+		MaxWasmEntrypointBytes: 8 * 1024 * 1024, // 8 MiB
 	}
 }
 
@@ -156,7 +167,7 @@ func CheckPlugin(dir string, limits Limits) *Report {
 		r.Findings = append(r.Findings, f)
 	}
 
-	// Language-specific static analysis on the entrypoint. Only run when the tree
+	// Runtime-specific static analysis on the entrypoint. Only run when the tree
 	// check found the entrypoint, to avoid a confusing double error.
 	entry := filepath.Join(dir, m.Entrypoint)
 	if src, rerr := os.ReadFile(entry); rerr == nil {
@@ -165,6 +176,8 @@ func CheckPlugin(dir string, limits Limits) *Report {
 			gateLua(r, m.Entrypoint, src)
 		case manifest.RuntimeJS:
 			gateJS(r, m.Entrypoint, src)
+		case manifest.RuntimeWasm:
+			gateWasm(r, m, src)
 		}
 	}
 	return r
@@ -209,13 +222,23 @@ func (r *Report) checkTree(dir string, m manifest.Manifest, limits Limits) {
 		}
 
 		fileCount++
-		total += info.Size()
-		if info.Size() > limits.MaxFileBytes {
-			r.addErrorFile("tree.file_too_large",
-				fmt.Sprintf("file is %d bytes, over the %d-byte per-file limit", info.Size(), limits.MaxFileBytes), rel)
-		}
-
 		base := d.Name()
+
+		// A wasm plugin's compiled entrypoint is a binary far larger than any
+		// source file, so it gets its own budget instead of the per-file and
+		// directory-total limits sized for text.
+		if base == m.Entrypoint && m.Runtime == manifest.RuntimeWasm {
+			if info.Size() > limits.MaxWasmEntrypointBytes {
+				r.addErrorFile("wasm.entrypoint_too_large",
+					fmt.Sprintf("compiled module is %d bytes, over the %d-byte wasm entrypoint limit", info.Size(), limits.MaxWasmEntrypointBytes), rel)
+			}
+		} else {
+			total += info.Size()
+			if info.Size() > limits.MaxFileBytes {
+				r.addErrorFile("tree.file_too_large",
+					fmt.Sprintf("file is %d bytes, over the %d-byte per-file limit", info.Size(), limits.MaxFileBytes), rel)
+			}
+		}
 		switch {
 		case base == "plugin.toml":
 			// the manifest; already validated

@@ -1,7 +1,8 @@
 # Plugin specification
 
 A community plugin is a directory under `plugins/<name>/` containing a `plugin.toml`
-manifest, a single source entrypoint, and a `README.md`. This document is the
+manifest, a single entrypoint (a source file — or, for `runtime = "wasm"`, one
+compiled WebAssembly module), and a `README.md`. This document is the
 authoritative reference for the manifest and the registry's requirements.
 
 The manifest shape is identical to the one the kasas host reads
@@ -38,8 +39,8 @@ category = "food"
 | `version` | yes | Semantic version `MAJOR.MINOR.PATCH` (optional `-prerelease`/`+build`). |
 | `description` | yes | 12–200 characters. Shown in the dashboard catalog. |
 | `author` | yes | Non-empty, ≤120 characters. |
-| `runtime` | yes | `lua` or `js`. |
-| `entrypoint` | no | Filename inside the directory; no path separators. Defaults to `main.lua` / `main.js`. For TypeScript set `main.ts`. |
+| `runtime` | yes | `lua`, `js`, or `wasm`. |
+| `entrypoint` | no | Filename inside the directory; no path separators. Defaults to `main.lua` / `main.js` / `main.wasm`. For TypeScript set `main.ts`. |
 | `hooks` | yes | Non-empty; each one of the known hooks (below). |
 | `capabilities` | no | Each one of the known capabilities (below). Declare only what you use. |
 | `license` | yes | SPDX id from the allowlist (below). *Registry-only.* |
@@ -224,6 +225,12 @@ To propose another, open an issue.
 | `kasas.log(level, msg, {fields})` | `kasas.log(level, msg, {fields})` | — |
 | `kasas.config` | `kasas.config` | — |
 | `kasas.set_config({k=v})` | `kasas.setConfig({k:v})` | — |
+
+For `wasm` plugins the first-party Go SDK
+(`github.com/paulmeier/kasas/pluginsdk/kasas`) mirrors this API one-to-one in
+PascalCase (`kasas.ApplyLabels`, `kasas.SetExtension`, …) with the same
+capability gates; any other language can implement the ABI directly — see
+[Go (WASM) in the host docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#go-wasm).
 
 The full host API, data shapes, and the TypeScript `kasas.d.ts` ambient types are in
 the [host plugin docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md).

@@ -97,23 +97,27 @@ var knownUIIcons = map[string]bool{
 // maxUITitleLen bounds the sidebar label, matching the host.
 const maxUITitleLen = 40
 
-// Runtime values accepted by the host. Each gates a different language-specific
+// Runtime values accepted by the host. Each gates a different runtime-specific
 // security pass in the gate package.
 const (
-	RuntimeLua = "lua"
-	RuntimeJS  = "js"
+	RuntimeLua  = "lua"
+	RuntimeJS   = "js"
+	RuntimeWasm = "wasm"
 )
 
 var knownRuntimes = map[string]bool{
-	RuntimeLua: true,
-	RuntimeJS:  true,
+	RuntimeLua:  true,
+	RuntimeJS:   true,
+	RuntimeWasm: true,
 }
 
-// DefaultEntrypoints is the per-runtime fallback source file when a manifest omits
-// `entrypoint`, matching the host.
+// DefaultEntrypoints is the per-runtime fallback entrypoint file when a manifest
+// omits `entrypoint`, matching the host. For lua/js it is a source file; for wasm
+// it is the compiled module.
 var DefaultEntrypoints = map[string]string{
-	RuntimeLua: "main.lua",
-	RuntimeJS:  "main.js",
+	RuntimeLua:  "main.lua",
+	RuntimeJS:   "main.js",
+	RuntimeWasm: "main.wasm",
 }
 
 // licenseAllowlist is the set of SPDX identifiers the registry accepts. A
@@ -332,15 +336,17 @@ func validateHomepage(h string) error {
 	return nil
 }
 
-// EntrypointExt returns the conventional source extension for the manifest's
-// runtime (e.g. ".lua"). It is informational; the actual entrypoint filename is
-// authoritative.
+// EntrypointExt returns the conventional entrypoint extension for the manifest's
+// runtime (e.g. ".lua"; ".wasm" is a compiled module, not source). It is
+// informational; the actual entrypoint filename is authoritative.
 func EntrypointExt(runtime string) string {
 	switch runtime {
 	case RuntimeLua:
 		return ".lua"
 	case RuntimeJS:
 		return ".js"
+	case RuntimeWasm:
+		return ".wasm"
 	default:
 		return ""
 	}

@@ -6,20 +6,28 @@ does not, and how to report a problem.
 
 ## The trust boundary
 
-A kasas plugin runs in-process inside a sandboxed language VM (gopher-lua for Lua,
-goja for JS/TS). Its only sanctioned path to data is the capability-checked `kasas`
-host API. The registry's submission gate is designed to ensure every listed plugin
-respects that boundary:
+A kasas plugin runs in-process inside a sandboxed runtime (gopher-lua for Lua,
+goja for JS/TS, wazero for WASM). Its only sanctioned path to data is the
+capability-checked `kasas` host API. The registry's submission gate is designed to
+ensure every listed plugin respects that boundary:
 
-1. **Single, reviewable source.** Each plugin is one self-contained entrypoint plus
-   a manifest and README — no extra modules, no `node_modules`, no binaries, no
-   nested directories, no symlinks. The whole plugin fits on a reviewer's screen.
-2. **No escape hatches.** A language-specific static pass rejects every API the host
-   strips at load (filesystem, network, process, dynamic code generation, module
-   loading, environment/prototype manipulation). Using one is a hard rejection, not
-   a warning.
+1. **Single, reviewable entrypoint.** Each plugin is one self-contained entrypoint
+   plus a manifest and README — no extra modules, no `node_modules`, no stray
+   binaries, no nested directories, no symlinks. For Lua and JS/TS the entrypoint
+   is source that fits on a reviewer's screen. For WASM it is one compiled module —
+   not human-reviewable, so the gate compensates with structural verification (see
+   2 and 3) and review leans on the capability tier and the plugin's linked source.
+2. **No escape hatches.** For Lua and JS/TS, a static pass rejects every API the
+   host strips at load (filesystem, network, process, dynamic code generation,
+   module loading, environment/prototype manipulation). For WASM, the gate verifies
+   the module can only import from the `kasas` host module and WASI preview1 —
+   which the host instantiates with no preopened directories and no sockets — so
+   there is nothing else for it to call. Using one is a hard rejection, not a
+   warning.
 3. **Loads as published.** JS/TS submissions are transpiled with the same esbuild
-   the host uses, so a listed plugin is proven to load.
+   the host uses, and WASM submissions are compiled (never run) with the same
+   wazero the host uses — with the ABI's required exports checked — so a listed
+   plugin is proven to load.
 4. **Least privilege, reviewed.** A plugin declares the capabilities it needs; the
    gate tiers them and a maintainer signs off before any plugin that can *write* a
    user's data is listed.
