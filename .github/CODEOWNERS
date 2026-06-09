@@ -1,0 +1,12 @@
+# Every change requires maintainer review. This is the human half of the submission
+# gate: the automated checks (validate.yml) prove a plugin is well-formed and
+# sandbox-safe; a maintainer confirms it does something legitimate and that any
+# write capability it requests is justified.
+*                       @paulmeier
+
+# The tooling that enforces the gate and the published catalog are especially
+# sensitive — a change here changes the trust guarantees for every plugin.
+/internal/               @paulmeier
+/cmd/                    @paulmeier
+/.github/workflows/      @paulmeier
+/registry/               @paulmeier

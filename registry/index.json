@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-09T13:30:31.410762789Z",
+  "repository": "https://github.com/paulmeier/kasas-plugins",
+  "plugins": [
+    {
+      "name": "coffee-budget",
+      "version": "0.1.0",
+      "description": "Labels transactions whose description matches a keyword (default: coffee).",
+      "author": "kasas community",
+      "license": "MIT",
+      "homepage": "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/coffee-budget",
+      "runtime": "lua",
+      "entrypoint": "main.lua",
+      "hooks": [
+        "OnTransactionCreate",
+        "OnTransactionUpdate"
+      ],
+      "capabilities": [
+        "transactions:read",
+        "labels:write"
+      ],
+      "capability_tier": "write",
+      "path": "plugins/coffee-budget",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "3cd26b9f960792f396a2f0c96c2ff74d7fccc61841cad3f309dd97d5526f3e55",
+          "size": 776
+        },
+        {
+          "path": "main.lua",
+          "sha256": "2573ea0ad0a1ad7882228ee2bca6e3fcb8ed57df8c8a911a62afb8b23b3ea09f",
+          "size": 823
+        },
+        {
+          "path": "plugin.toml",
+          "sha256": "5d82d76a6192e341dcab875c409c20c02bb40b86e05f0fadd2f45e1ac2cf168c",
+          "size": 552
+        }
+      ],
+      "content_hash": "sha256:91ef32b70e419b1c41b5fd888e98df43e7f7ef5a030361ae8f4901c2472f4191",
+      "size_bytes": 2151
+    },
+    {
+      "name": "large-expense-alert",
+      "version": "0.2.0",
+      "description": "Flags transactions whose amount exceeds a configurable threshold.",
+      "author": "kasas community",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/paulmeier/kasas-plugins/tree/main/plugins/large-expense-alert",
+      "runtime": "js",
+      "entrypoint": "main.ts",
+      "hooks": [
+        "OnTransactionCreate"
+      ],
+      "capabilities": [
+        "extensions:write"
+      ],
+      "capability_tier": "write",
+      "path": "plugins/large-expense-alert",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "1338942c1ab546275c5c319bf05efcad06c5aa5c5adff471e73d38dd0f0f42a7",
+          "size": 1009
+        },
+        {
+          "path": "main.ts",
+          "sha256": "7e393f5139deaa3b82c2775a7b688d92db24cd611e51df59a7c4fda36188df43",
+          "size": 1718
+        },
+        {
+          "path": "plugin.toml",
+          "sha256": "414aeda14d2770fab10a9c83d195714941edef10d2eee7d30bb2a081a13f77cb",
+          "size": 573
+        }
+      ],
+      "content_hash": "sha256:556c216a4a0d993f2a1bb99c7d8a45b81b579344270bb7a4486ae680e5e9252c",
+      "size_bytes": 3300
+    }
+  ]
+}

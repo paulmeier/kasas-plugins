@@ -1,0 +1,51 @@
+name: Publish registry
+
+# On every push to main, re-verify that registry/index.json matches the plugins
+# directory and publish it to GitHub Pages, giving the kasas dashboard a stable,
+# cache-friendly endpoint to fetch the catalog from:
+#
+#   https://paulmeier.github.io/kasas-plugins/index.json
+#
+# The committed file at registry/index.json (on the raw endpoint) remains the
+# source of truth; Pages is a CDN-backed mirror. Enable Pages for the repo
+# (Settings -> Pages -> Source: GitHub Actions) for this workflow to deploy.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build & publish index
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify index is current
+        run: go run ./cmd/kasas-plugins index --check
+      - name: Stage site
+        run: |
+          mkdir -p _site
+          cp registry/index.json _site/index.json
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

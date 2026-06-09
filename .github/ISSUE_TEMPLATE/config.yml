@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: kasas (the app)
+    url: https://github.com/paulmeier/kasas/issues
+    about: Bugs or questions about the kasas application itself (not a specific community plugin).
+  - name: Security disclosure
+    url: https://github.com/paulmeier/kasas-plugins/security/advisories/new
+    about: Report a vulnerability in a plugin or in the registry tooling privately. See SECURITY.md.

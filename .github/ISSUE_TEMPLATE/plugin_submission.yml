@@ -1,0 +1,57 @@
+name: Plugin submission proposal
+description: Propose a new community plugin before (or instead of) opening a PR.
+title: "[plugin] <name>: <one-line description>"
+labels: ["plugin-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a plugin! Submissions ultimately land as PRs that add a
+        `plugins/<name>/` directory, but an issue is a good place to discuss the idea
+        first. See CONTRIBUTING.md for the full process and the submission gate.
+  - type: input
+    id: name
+    attributes:
+      label: Plugin name (slug)
+      description: Lowercase, matches the directory name. e.g. `coffee-budget`.
+      placeholder: my-plugin
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options: [lua, "js (JavaScript/TypeScript)"]
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What does it do?
+      description: Describe the full behavior. Which hooks does it react to?
+    validations:
+      required: true
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: Capabilities it needs
+      options:
+        - label: "transactions:read — read the triggering transaction / run searches"
+        - label: "labels:write — apply/remove labels (write capability)"
+        - label: "extensions:write — set/remove schema extensions (write capability)"
+  - type: textarea
+    id: justification
+    attributes:
+      label: Why does it need each capability?
+      description: Required if you checked any write capability above.
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Confirmations
+      options:
+        - label: "It is a single self-contained source file (no extra modules, no node_modules, no binaries)."
+          required: true
+        - label: "It uses only the kasas host API — no filesystem, network, os/io, eval, require/import, or process."
+          required: true
+        - label: "I am the author or have the right to submit it under a permissive license (see CONTRIBUTING.md)."
+          required: true
