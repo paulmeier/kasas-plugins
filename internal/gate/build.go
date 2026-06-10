@@ -108,20 +108,6 @@ func ProduceBundle(b manifest.BuildManifest, workDir string) ([]byte, error) {
 		return nil, &buildError{"build.checkout_failed", fmt.Errorf("git checkout %s: %w%s", shortRef(b.Ref), err, tail(out))}
 	}
 
-	// Install dependencies only when the source actually declares them. A plugin
-	// that bundles only its own multi-file source has no package.json and needs no
-	// install; one that pulls third-party packages must commit a lockfile so the
-	// install is deterministic.
-	if fileExists(filepath.Join(repo, "package.json")) {
-		if !hasLockfile(repo) {
-			return nil, &buildError{"build.no_lockfile",
-				fmt.Errorf("source has a package.json but no package-lock.json/npm-shrinkwrap.json; a committed lockfile is required so dependencies install deterministically")}
-		}
-		if out, err := run(repo, "npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"); err != nil {
-			return nil, &buildError{"build.install_failed", fmt.Errorf("npm ci: %w%s", err, tail(out))}
-		}
-	}
-
 	entry := filepath.Join(repo, filepath.FromSlash(b.Entry))
 	if !withinDir(repo, entry) {
 		return nil, &buildError{"build.bundle_failed", fmt.Errorf("entry %q escapes the repository", b.Entry)}
@@ -130,11 +116,53 @@ func ProduceBundle(b manifest.BuildManifest, workDir string) ([]byte, error) {
 		return nil, &buildError{"build.bundle_failed", fmt.Errorf("entry %q does not exist in the repository at %s", b.Entry, shortRef(b.Ref))}
 	}
 
-	bundle, err := canonicalBundle(repo, b.Entry)
+	// The npm project is the nearest ancestor of the entry that has a package.json,
+	// bounded by the repository root — so both a repo-root project and a source tree
+	// kept in a subdirectory (a monorepo, or a plugin whose source lives under the
+	// registry's own examples/) work. Install dependencies only when the source
+	// actually declares them; a plugin that bundles only its own multi-file source
+	// has no package.json and needs no install.
+	baseDir := repo
+	if pd, ok := nearestPackageJSON(repo, filepath.Dir(entry)); ok {
+		baseDir = pd
+		if !hasLockfile(baseDir) {
+			return nil, &buildError{"build.no_lockfile",
+				fmt.Errorf("source has a package.json but no package-lock.json/npm-shrinkwrap.json; a committed lockfile is required so dependencies install deterministically")}
+		}
+		if out, err := run(baseDir, "npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"); err != nil {
+			return nil, &buildError{"build.install_failed", fmt.Errorf("npm ci: %w%s", err, tail(out))}
+		}
+	}
+
+	entryRel, err := filepath.Rel(baseDir, entry)
+	if err != nil {
+		return nil, &buildError{"build.bundle_failed", fmt.Errorf("locate entry: %w", err)}
+	}
+	bundle, err := canonicalBundle(baseDir, filepath.ToSlash(entryRel))
 	if err != nil {
 		return nil, &buildError{"build.bundle_failed", err}
 	}
 	return bundle, nil
+}
+
+// nearestPackageJSON walks up from start (inclusive) to root (inclusive) and
+// returns the first directory containing a package.json. start is assumed to be
+// inside root.
+func nearestPackageJSON(root, start string) (string, bool) {
+	dir := start
+	for {
+		if fileExists(filepath.Join(dir, "package.json")) {
+			return dir, true
+		}
+		if dir == root {
+			return "", false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 // canonicalBundle is THE bundle definition: one fixed esbuild configuration, so
