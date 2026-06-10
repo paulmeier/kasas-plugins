@@ -254,7 +254,14 @@ Requirements on the source:
   bundles only its own multi-file source needs no lockfile.
 - Dependencies must be **pure computation** that bundles cleanly: a dependency on a
   Node builtin (`fs`, `net`, …) fails to bundle, and even if it bundled it could not
-  call out — the sandbox grants no filesystem, process, or network.
+  call out — the sandbox grants no filesystem, process, or network. Libraries that
+  detect the global object via `global`/`self` work: the canonical bundler resolves
+  both to `globalThis` (which the host provides), so a library never falls back to
+  the `Function` constructor the sandbox removes.
+
+A worked example lives at [`examples/lodash-demo`](../examples/lodash-demo) (source)
+and [`plugins/lodash-demo`](../plugins/lodash-demo) (the bundled plugin): it depends
+on lodash, pulled from npm and folded into a single verified `main.js`.
 
 Produce the artifact with the registry tooling so it is exactly what the gate
 reproduces, then commit it alongside `plugin.toml`:

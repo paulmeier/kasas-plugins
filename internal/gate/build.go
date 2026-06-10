@@ -186,6 +186,17 @@ func canonicalBundle(repoDir, entryRel string) ([]byte, error) {
 		Footer:        map[string]string{"js": bundleFooter},
 		Target:        esbuild.ES2017,
 		Platform:      esbuild.PlatformBrowser,
+		// Point the classic "global object" probes at globalThis, which goja
+		// provides. Many npm libraries (lodash among them) detect the global via
+		// `global`/`self`, falling back to `Function('return this')()` — but the
+		// host removes the Function constructor as a sandbox-hardening measure, so
+		// that fallback would throw at load. Resolving global/self to globalThis at
+		// bundle time lets bundled libraries find the global object without the
+		// removed constructor, keeping the sandbox unchanged.
+		Define: map[string]string{
+			"global": "globalThis",
+			"self":   "globalThis",
+		},
 		Charset:       esbuild.CharsetUTF8,
 		LegalComments: esbuild.LegalCommentsNone,
 		Write:         false,
