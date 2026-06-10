@@ -53,8 +53,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Gate all plugins
-        run: go run ./cmd/kasas-plugins validate
+      # Node + npm are needed for reproducible-bundle verification (ADR 0001):
+      # a plugin with a [build] block is re-bundled from its linked source and
+      # proven to match the committed entrypoint. git is preinstalled on the runner.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Gate all plugins (with bundle verification)
+        run: go run ./cmd/kasas-plugins validate --verify-build
       - name: Verify registry index is current
         run: go run ./cmd/kasas-plugins index --check
 

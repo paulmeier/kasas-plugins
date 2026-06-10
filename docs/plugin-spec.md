@@ -47,6 +47,7 @@ category = "food"
 | `homepage` | yes | `https://` URL. *Registry-only.* |
 | `[config]` | no | The plugin's configurable keys **and their defaults**, exposed as `kasas.config`. This block is also the schema of what an end user may override (see [Configuration](#configuration)). |
 | `[ui]` | no | Declares a [dashboard page](#dashboard-pages-ui): `title` (≤40 chars) and an optional curated `icon` name. Requires the `OnPageRender` hook and the `ui:page` capability. |
+| `[build]` | no | Marks the JS/TS entrypoint as a reproducible dependency **bundle** (ADR 0001) and links the source the gate re-bundles to verify it. *Registry-only.* See [Bundled dependencies](#bundled-dependencies-build). |
 
 Unknown keys are tolerated (the host ignores them), but don't rely on them — they
 carry no meaning to either the host or the registry.
@@ -211,6 +212,60 @@ To keep the legal footing of installing community code clear, the manifest
 `Unlicense`.
 
 To propose another, open an issue.
+
+## Bundled dependencies (`[build]`) {#bundled-dependencies-build}
+
+By default a JS/TS plugin is a single hand-written file. Per
+[ADR 0001](https://github.com/paulmeier/kasas/blob/main/docs/architecture/decisions/0001-plugin-dependency-bundling.md)
+it may instead depend on third-party libraries, **provided they are bundled into
+the single committed entrypoint**. You add a `[build]` block that links the public
+source the bundle was produced from; the gate clones that source at the pinned
+commit, installs its locked dependencies (install scripts disabled), re-bundles with
+one fixed esbuild configuration, and requires the result to equal your committed
+entrypoint byte-for-byte. The host still sees, hashes, and runs exactly one file,
+and the sandbox is unchanged — bundled code gets no new powers.
+
+```toml
+runtime    = "js"
+entrypoint = "main.js"   # the committed bundle
+
+[build]
+repository = "https://github.com/you/your-plugin"
+ref        = "0f1c2b3a4d5e6f7081920a1b2c3d4e5f60718293"  # full 40-char commit SHA
+entry      = "src/main.ts"                                # bundler entry in the repo
+```
+
+| Field | Required | Rules |
+| ----- | -------- | ----- |
+| `repository` | yes | `https://` git URL of the plugin's source. |
+| `ref` | yes | A full 40-character commit SHA. A branch or tag is rejected — only a pinned commit is reproducible. |
+| `entry` | yes | Clean repo-relative path to the bundler entry, a `.ts`/`.js`/`.tsx`/`.jsx`/`.mjs`/`.cjs` file. No `..`, no leading `/`. |
+
+`[build]` is **JS/TS only**: a WASM module statically links its dependencies
+already, and Lua bundling is out of scope.
+
+Requirements on the source:
+
+- The entry **`export`s its hook functions** (`export function OnTransactionCreate
+  …`, `export function OnUninstall …`). The canonical bundle lifts those exports
+  onto the global object so the host resolves them like a hand-written entrypoint.
+- If it imports npm packages, it commits a **`package-lock.json`** (or
+  `npm-shrinkwrap.json`) so `npm ci` installs deterministically. A plugin that
+  bundles only its own multi-file source needs no lockfile.
+- Dependencies must be **pure computation** that bundles cleanly: a dependency on a
+  Node builtin (`fs`, `net`, …) fails to bundle, and even if it bundled it could not
+  call out — the sandbox grants no filesystem, process, or network.
+
+Produce the artifact with the registry tooling so it is exactly what the gate
+reproduces, then commit it alongside `plugin.toml`:
+
+```sh
+go run ./cmd/kasas-plugins bundle plugins/<name>   # writes plugins/<name>/main.js
+go run ./cmd/kasas-plugins validate --verify-build plugins/<name>
+```
+
+See [submission-guidelines.md](submission-guidelines.md) for the `build.*` finding
+codes and the bundle size budget.
 
 ## The host API (summary)
 

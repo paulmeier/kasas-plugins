@@ -222,3 +222,98 @@ title = "Pager"
 		})
 	}
 }
+
+// --- [build] block (ADR 0001) ---
+
+const jsBundleManifestHead = `
+name        = "bundled"
+version     = "1.0.0"
+description = "a bundled example plugin"
+author      = "a"
+runtime     = "js"
+entrypoint  = "main.js"
+license     = "MIT"
+homepage    = "https://example.com"
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["extensions:write"]
+`
+
+func TestParseValidBuildBlock(t *testing.T) {
+	src := jsBundleManifestHead + `
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "1111111111111111111111111111111111111111"
+entry      = "src/main.ts"
+`
+	m, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("expected valid build block, got: %v", err)
+	}
+	if m.Build == nil || m.Build.Entry != "src/main.ts" {
+		t.Fatalf("build block not parsed: %+v", m.Build)
+	}
+}
+
+func TestParseRejectsBadBuildBlocks(t *testing.T) {
+	cases := map[string]string{
+		"non-https repo": `
+[build]
+repository = "git@github.com:example/bundled.git"
+ref        = "1111111111111111111111111111111111111111"
+entry      = "src/main.ts"
+`,
+		"branch ref not pinned": `
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "main"
+entry      = "src/main.ts"
+`,
+		"short ref": `
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "1111111"
+entry      = "src/main.ts"
+`,
+		"entry escapes repo": `
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "1111111111111111111111111111111111111111"
+entry      = "../secrets.ts"
+`,
+		"entry not source": `
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "1111111111111111111111111111111111111111"
+entry      = "dist/main.wasm"
+`,
+	}
+	for name, block := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse([]byte(jsBundleManifestHead + block)); err == nil {
+				t.Fatalf("expected rejection for %q", name)
+			}
+		})
+	}
+}
+
+func TestParseRejectsBuildOnNonJSRuntime(t *testing.T) {
+	src := `
+name        = "bundled"
+version     = "1.0.0"
+description = "a bundled example plugin"
+author      = "a"
+runtime     = "lua"
+license     = "MIT"
+homepage    = "https://example.com"
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["labels:write"]
+
+[build]
+repository = "https://github.com/example/bundled"
+ref        = "1111111111111111111111111111111111111111"
+entry      = "src/main.ts"
+`
+	if _, err := Parse([]byte(src)); err == nil {
+		t.Fatal("expected [build] on a lua plugin to be rejected")
+	}
+}

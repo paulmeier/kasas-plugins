@@ -167,9 +167,34 @@ type Manifest struct {
 	// host; mirrored here so the gate enforces the same unit rule.
 	UI *UIManifest `toml:"ui"`
 
+	// Build, when present, declares that the entrypoint is a dependency bundle
+	// produced from a linked source repository (ADR 0001). It records exactly
+	// where that source lives and at what immutable commit, so the gate can
+	// reproduce the bundle and prove the committed artifact is that source. The
+	// host ignores this block: a bundled plugin drops into plugins.dir as one
+	// self-contained file like any other. Registry-only.
+	Build *BuildManifest `toml:"build"`
+
 	// Registry-only metadata (ignored by the host).
 	License  string `toml:"license"`
 	Homepage string `toml:"homepage"`
+}
+
+// BuildManifest is the optional [build] block (ADR 0001). It turns the
+// "single self-contained entrypoint" into a *reproducible* artifact: the
+// author develops against third-party packages and ships a pre-bundled
+// entrypoint, and this block points at the source the gate re-bundles to
+// verify it byte-for-byte. Only JS/TS plugins use it (WASM links its
+// dependencies statically by construction; Lua bundling is out of scope).
+type BuildManifest struct {
+	// Repository is the public https git URL of the plugin's source.
+	Repository string `toml:"repository"`
+	// Ref is the immutable full commit SHA the bundle was built from. A branch
+	// or tag is rejected: only a pinned commit makes the build reproducible.
+	Ref string `toml:"ref"`
+	// Entry is the bundler entry point inside the repository (e.g. "src/main.ts"),
+	// a clean repo-relative path to a JS/TS source file.
+	Entry string `toml:"entry"`
 }
 
 // UIManifest is the optional [ui] block: the sidebar label and a curated icon
@@ -242,6 +267,9 @@ func (m *Manifest) normalizeAndValidate() error {
 		}
 	}
 	if err := m.validateUI(); err != nil {
+		return err
+	}
+	if err := m.validateBuild(); err != nil {
 		return err
 	}
 
@@ -317,6 +345,100 @@ func (m *Manifest) validateUI() error {
 		return fmt.Errorf("a [ui] block requires the %q capability", CapUIPage)
 	}
 	return nil
+}
+
+// commitRE matches a full git commit SHA (40 lowercase hex chars). The build
+// ref must be a pinned commit — a branch or tag would let the upstream source
+// change under a fixed artifact, defeating the whole point of reproducing it.
+var commitRE = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// bundleEntryExts are the source extensions a bundler entry may have. The entry
+// is JS/TS source the gate bundles; a compiled or data file is never an entry.
+var bundleEntryExts = map[string]bool{
+	".js": true, ".ts": true, ".jsx": true, ".tsx": true, ".mjs": true, ".cjs": true,
+}
+
+// validateBuild checks the optional [build] block (ADR 0001). The block makes
+// the entrypoint a reproducible dependency bundle, so its fields must pin the
+// source precisely: a JS/TS-only runtime, an https git repository, an immutable
+// commit, and a clean in-repo entry path. Everything here is verified again at
+// gate time by re-bundling; these are the cheap structural rules that let a bad
+// block fail fast with a clear message.
+func (m *Manifest) validateBuild() error {
+	if m.Build == nil {
+		return nil
+	}
+	b := m.Build
+	b.Repository = strings.TrimSpace(b.Repository)
+	b.Ref = strings.TrimSpace(b.Ref)
+	b.Entry = strings.TrimSpace(b.Entry)
+
+	// Bundling applies only to JS/TS. WASM statically links its dependencies into
+	// the compiled module already; Lua bundling is deliberately out of scope.
+	if m.Runtime != RuntimeJS {
+		return fmt.Errorf("[build] is only valid for runtime %q (a %s plugin bundles dependencies differently)", RuntimeJS, m.Runtime)
+	}
+	if err := validateGitRepository(b.Repository); err != nil {
+		return fmt.Errorf("build.repository: %w", err)
+	}
+	if !commitRE.MatchString(b.Ref) {
+		return fmt.Errorf("build.ref %q must be a full 40-character commit SHA (a branch or tag is not reproducible)", b.Ref)
+	}
+	if b.Entry == "" {
+		return fmt.Errorf("build.entry is required (the bundler entry point inside the repository, e.g. \"src/main.ts\")")
+	}
+	if err := validateCleanRelPath(b.Entry); err != nil {
+		return fmt.Errorf("build.entry: %w", err)
+	}
+	if ext := strings.ToLower(pathExt(b.Entry)); !bundleEntryExts[ext] {
+		return fmt.Errorf("build.entry %q must be a JS/TS source file (one of .js, .ts, .jsx, .tsx, .mjs, .cjs)", b.Entry)
+	}
+	return nil
+}
+
+// validateGitRepository accepts an https git URL (the only transport the gate
+// clones from for a public submission).
+func validateGitRepository(repo string) error {
+	if repo == "" {
+		return fmt.Errorf("a source repository URL is required so the gate can reproduce the bundle")
+	}
+	u, err := url.Parse(repo)
+	if err != nil {
+		return fmt.Errorf("%q is not a valid URL: %w", repo, err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("%q must use https", repo)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%q must include a host", repo)
+	}
+	return nil
+}
+
+// validateCleanRelPath rejects absolute paths, parent-directory escapes, and
+// backslashes, so an entry can only point inside the cloned repository.
+func validateCleanRelPath(p string) error {
+	if strings.ContainsRune(p, '\\') {
+		return fmt.Errorf("path %q must use forward slashes", p)
+	}
+	if strings.HasPrefix(p, "/") {
+		return fmt.Errorf("path %q must be relative to the repository root", p)
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return fmt.Errorf("path %q must not escape the repository with \"..\"", p)
+		}
+	}
+	return nil
+}
+
+// pathExt returns the extension of a forward-slash path (filepath.Ext is
+// OS-separator aware; build entries are always forward-slash).
+func pathExt(p string) string {
+	if i := strings.LastIndexByte(p, '.'); i >= 0 && i > strings.LastIndexByte(p, '/') {
+		return p[i:]
+	}
+	return ""
 }
 
 func validateHomepage(h string) error {

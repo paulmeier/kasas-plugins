@@ -50,18 +50,28 @@ var jsBannedPatterns = []struct {
 // exact esbuild configuration the host uses at load time, so a submission that
 // passes the gate is proven to both (a) avoid every sandbox escape hatch and (b)
 // actually load in the host.
-func gateJS(r *Report, file string, src []byte) {
-	scrubbed := stripJS(string(src))
-	seen := map[string]bool{}
-	for _, p := range jsBannedPatterns {
-		if p.re.MatchString(scrubbed) {
-			// De-dup identical messages (several patterns share a code).
-			key := p.code + "|" + p.message
-			if seen[key] {
-				continue
+//
+// bundled marks a plugin with a [build] block (ADR 0001), whose entrypoint is a
+// machine-generated dependency bundle. The escape-hatch pattern scan is meant for
+// hand-written source: a real bundled library legitimately contains constructs it
+// bans (lodash alone uses Function(), globalThis, and __proto__). For a bundle the
+// guarantee shifts from "the artifact reads clean" to "the artifact is provably
+// this source" (verifyBundle), with the sandbox as the backstop — so the pattern
+// scan is skipped, but the host-load transpile check still runs.
+func gateJS(r *Report, file string, src []byte, bundled bool) {
+	if !bundled {
+		scrubbed := stripJS(string(src))
+		seen := map[string]bool{}
+		for _, p := range jsBannedPatterns {
+			if p.re.MatchString(scrubbed) {
+				// De-dup identical messages (several patterns share a code).
+				key := p.code + "|" + p.message
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				r.addErrorFile(p.code, "disallowed construct: "+p.message, file)
 			}
-			seen[key] = true
-			r.addErrorFile(p.code, "disallowed construct: "+p.message, file)
 		}
 	}
 
