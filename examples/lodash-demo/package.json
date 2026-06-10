@@ -1,0 +1,10 @@
+{
+  "name": "lodash-demo-source",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source for the lodash-demo kasas plugin: bundles lodash into a single entrypoint (ADR 0001).",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "4.17.21"
+  }
+}

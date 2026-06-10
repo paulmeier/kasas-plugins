@@ -13,21 +13,31 @@ ensure every listed plugin respects that boundary:
 
 1. **Single, reviewable entrypoint.** Each plugin is one self-contained entrypoint
    plus a manifest and README — no extra modules, no `node_modules`, no stray
-   binaries, no nested directories, no symlinks. For Lua and JS/TS the entrypoint
-   is source that fits on a reviewer's screen. For WASM it is one compiled module —
-   not human-reviewable, so the gate compensates with structural verification (see
-   2 and 3) and review leans on the capability tier and the plugin's linked source.
-2. **No escape hatches.** For Lua and JS/TS, a static pass rejects every API the
-   host strips at load (filesystem, network, process, dynamic code generation,
-   module loading, environment/prototype manipulation). For WASM, the gate verifies
-   the module can only import from the `kasas` host module and WASI preview1 —
-   which the host instantiates with no preopened directories and no sockets — so
-   there is nothing else for it to call. Using one is a hard rejection, not a
-   warning.
-3. **Loads as published.** JS/TS submissions are transpiled with the same esbuild
-   the host uses, and WASM submissions are compiled (never run) with the same
-   wazero the host uses — with the ABI's required exports checked — so a listed
-   plugin is proven to load.
+   binaries, no nested directories, no symlinks. For hand-written Lua and JS/TS the
+   entrypoint is source that fits on a reviewer's screen. For WASM it is one
+   compiled module, and for a **bundled** JS/TS plugin
+   ([ADR 0001](https://github.com/paulmeier/kasas/blob/main/docs/architecture/decisions/0001-plugin-dependency-bundling.md))
+   it is one machine-generated bundle — neither is line-by-line human-reviewable, so
+   the gate compensates with structural and provenance verification (see 2 and 3).
+2. **No escape hatches.** For hand-written Lua and JS/TS, a static pass rejects
+   every API the host strips at load (filesystem, network, process, dynamic code
+   generation, module loading, environment/prototype manipulation). A bundled JS
+   plugin's artifact is machine-generated and legitimately contains some of those
+   constructs, so its guarantee is provenance, not a clean read (see 3) — and the
+   sandbox is the backstop: bundled code runs in the same sealed goja VM with no
+   filesystem, process, or network. For WASM, the gate verifies the module can only
+   import from the `kasas` host module and WASI preview1 — which the host
+   instantiates with no preopened directories and no sockets — so there is nothing
+   else for it to call.
+3. **Loads as published, and is provably its source.** JS/TS submissions are
+   transpiled with the same esbuild the host uses, and WASM submissions are compiled
+   (never run) with the same wazero the host uses — with the ABI's required exports
+   checked — so a listed plugin is proven to load. For a **bundled** JS/TS plugin
+   the gate additionally **reproduces the bundle**: it clones the source repository
+   at the pinned commit, installs the locked dependencies with install scripts
+   disabled, re-bundles with one fixed esbuild configuration, and requires the
+   result to equal the committed entrypoint byte-for-byte. A mismatch is a hard
+   rejection, so the artifact a user installs is provably the linked source.
 4. **Least privilege, reviewed.** A plugin declares the capabilities it needs; the
    gate tiers them and a maintainer signs off before any plugin that can *write* a
    user's data is listed.
@@ -36,7 +46,12 @@ ensure every listed plugin respects that boundary:
    writing anything into `plugins.dir`, so what a user installs is byte-for-byte what
    was reviewed here.
 
-The gate itself never executes submitted code; it only reads files.
+The gate itself never executes submitted code. For most checks it only reads
+files; to reproduce a bundle it additionally runs `git` (which fetches files),
+`npm ci --ignore-scripts` (which installs packages without running any lifecycle
+hook), and esbuild (which parses and concatenates source without evaluating it) —
+none of which runs the plugin's own logic, exactly as the WASM gate compiles but
+never instantiates a module.
 
 ## What the registry does NOT guarantee
 

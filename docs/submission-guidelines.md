@@ -26,7 +26,7 @@ surfaced to reviewers). A plugin is listed only if it has zero errors.
 | `tree.nested_dir` | A plugin is a single flat directory; no subdirectories (this also blocks `node_modules`, `.git`, …). |
 | `tree.symlink` | No symlinks. |
 | `tree.disallowed_file` | Only the entrypoint, `README.md`/`*.md`, `*.txt`, `*.toml`, `*.json`, and `*.d.ts` are allowed. No binaries/archives/scripts (a wasm plugin's compiled entrypoint is the one exception). |
-| `tree.file_too_large` | No single file over 256 KiB (a wasm entrypoint has its own budget instead — see the WASM rules). |
+| `tree.file_too_large` | No single file over 256 KiB (a wasm entrypoint, or a bundled JS entrypoint, has its own budget instead — see the WASM and `[build]` rules). |
 | `tree.too_large` | The whole plugin must be under 1 MiB (not counting a wasm entrypoint, which has its own budget). |
 | `tree.too_many_files` | At most 32 files. |
 
@@ -59,6 +59,53 @@ Do all work through the `kasas` table. The host opens only `base`, `table`,
 As with Lua, comments and string/template literals are stripped before scanning, so
 a banned word in a log message is fine. Write `.ts` if you want types — esbuild
 strips them at load; no build step or `node_modules`.
+
+The escape-hatch scan above applies to **hand-written** entrypoints. A **bundled**
+plugin (one with a `[build]` block, see below) ships a machine-generated artifact
+that legitimately contains some of those constructs, so the scan is skipped for it
+and the guarantee comes from reproducible-build verification instead. The
+host-load transpile check (`js.transpile_failed`) still runs.
+
+## Bundled dependencies (`[build]`, ADR 0001)
+
+A JS/TS plugin may depend on third-party libraries if it **bundles them, at
+submission time, into the single entrypoint**. Add a `[build]` block pointing at the
+public source the bundle was produced from, at a pinned commit; the gate reproduces
+the bundle and proves the committed entrypoint matches it byte-for-byte.
+
+```toml
+runtime    = "js"
+entrypoint = "main.js"   # the committed BUNDLE
+
+[build]
+repository = "https://github.com/you/your-plugin"  # https git URL of the source
+ref        = "<full 40-char commit SHA>"            # immutable pin (no branch/tag)
+entry      = "src/main.ts"                          # bundler entry inside the repo
+```
+
+Your source must `export` its hook functions (`export function OnTransactionCreate
+…`), and if it pulls npm packages it must commit a `package-lock.json` so the
+install is deterministic. Produce the artifact with the registry tooling so it is
+exactly what the gate will reproduce, then commit it:
+
+```sh
+go run ./cmd/kasas-plugins bundle plugins/<name>   # writes plugins/<name>/main.js
+```
+
+| Code | Rule |
+| ---- | ---- |
+| `build.not_verified` | *(warning)* `validate` ran without `--verify-build` (no git/npm/network), so the bundle's provenance was not checked. CI runs `validate --verify-build`, where this becomes a real check. |
+| `build.clone_failed` | The `[build].repository` could not be cloned. |
+| `build.checkout_failed` | The `[build].ref` commit was not found in the repository. |
+| `build.no_lockfile` | The source has a `package.json` but no `package-lock.json`/`npm-shrinkwrap.json`; a committed lockfile is required for a deterministic install. |
+| `build.install_failed` | `npm ci --ignore-scripts` failed. |
+| `build.bundle_failed` | esbuild could not bundle the entry (e.g. an unresolved import, or a dependency on a Node builtin like `fs`). |
+| `build.mismatch` | The committed entrypoint is not byte-for-byte the reproduced bundle. Regenerate it with `kasas-plugins bundle` and commit the result. |
+| `js.bundle_too_large` | A bundled entrypoint is over the 2 MiB bundle budget (separate from the 256 KiB per-file limit, which still applies to hand-written JS). |
+
+Build verification needs `git`, `npm`, and network, so it is **off by default**
+locally (`validate` emits `build.not_verified`) and **on in CI**
+(`validate --verify-build`).
 
 ## WASM rules (`runtime = "wasm"`)
 

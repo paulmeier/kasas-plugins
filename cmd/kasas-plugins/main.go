@@ -5,8 +5,9 @@
 //
 // Usage:
 //
-//	kasas-plugins validate [plugin-dir ...]   # gate one or more plugins (default: all)
-//	kasas-plugins index [--check] [--out f]   # build registry/index.json (or verify it)
+//	kasas-plugins validate [--verify-build] [plugin-dir ...]  # gate one or more plugins (default: all)
+//	kasas-plugins bundle <plugin-dir>                         # reproduce a bundled plugin's entrypoint (ADR 0001)
+//	kasas-plugins index [--check] [--out f]                   # build registry/index.json (or verify it)
 //
 // validate exits non-zero if any plugin fails the gate. index --check exits non-zero
 // if the committed index does not match the plugins directory, which is the CI gate
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/paulmeier/kasas-plugins/internal/gate"
+	"github.com/paulmeier/kasas-plugins/internal/manifest"
 	"github.com/paulmeier/kasas-plugins/internal/registry"
 )
 
@@ -39,6 +41,8 @@ func main() {
 	switch os.Args[1] {
 	case "validate":
 		err = cmdValidate(os.Args[2:])
+	case "bundle":
+		err = cmdBundle(os.Args[2:])
 	case "index":
 		err = cmdIndex(os.Args[2:])
 	case "-h", "--help", "help":
@@ -59,8 +63,15 @@ func usage() {
 	fmt.Fprint(os.Stderr, `kasas-plugins — community plugin registry tooling
 
 Usage:
-  kasas-plugins validate [plugin-dir ...]   gate plugins (default: every plugin under ./plugins)
-  kasas-plugins index [--check] [--out f]   build registry/index.json (--check verifies it is current)
+  kasas-plugins validate [--verify-build] [plugin-dir ...]
+        gate plugins (default: every plugin under ./plugins).
+        --verify-build re-bundles every plugin with a [build] block from its
+        linked source and proves the committed entrypoint matches (needs git+npm).
+  kasas-plugins bundle <plugin-dir>
+        reproduce a bundled plugin's entrypoint from its [build] source and write
+        it into the plugin directory (ADR 0001).
+  kasas-plugins index [--check] [--out f]
+        build registry/index.json (--check verifies it is current).
 `)
 }
 
@@ -68,7 +79,19 @@ Usage:
 // when none are given. It prints a per-plugin report and fails if any plugin has an
 // error-severity finding.
 func cmdValidate(args []string) error {
-	dirs := args
+	var dirs []string
+	opts := gate.Options{}
+	for _, a := range args {
+		switch a {
+		case "--verify-build":
+			opts.VerifyBuild = true
+		default:
+			if len(a) > 0 && a[0] == '-' {
+				return fmt.Errorf("unknown flag %q", a)
+			}
+			dirs = append(dirs, a)
+		}
+	}
 	if len(dirs) == 0 {
 		var derr error
 		dirs, derr = allPluginDirs(pluginsRelDir)
@@ -84,7 +107,7 @@ func cmdValidate(args []string) error {
 	limits := gate.DefaultLimits()
 	failed := 0
 	for _, d := range dirs {
-		rep := gate.CheckPlugin(d, limits)
+		rep := gate.CheckPluginWithOptions(d, limits, opts)
 		printReport(rep)
 		if !rep.OK() {
 			failed++
@@ -95,6 +118,47 @@ func cmdValidate(args []string) error {
 		return fmt.Errorf("%d plugin(s) failed the submission gate", failed)
 	}
 	return nil
+}
+
+// cmdBundle reproduces a bundled plugin's entrypoint (ADR 0001) from the source
+// its [build] block links and writes it into the plugin directory. An author runs
+// it to produce exactly the bytes the gate will reproduce, so `validate
+// --verify-build` then matches.
+func cmdBundle(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: kasas-plugins bundle <plugin-dir>")
+	}
+	dir := args[0]
+	data, err := os.ReadFile(filepath.Join(dir, "plugin.toml"))
+	if err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+	m, err := manifest.Parse(data)
+	if err != nil {
+		return fmt.Errorf("invalid manifest: %w", err)
+	}
+	if m.Build == nil {
+		return fmt.Errorf("%s has no [build] block; nothing to bundle (only bundled plugins reproduce an entrypoint)", dir)
+	}
+	fmt.Printf("bundling %s from %s@%s (entry %s)…\n", m.Name, m.Build.Repository, shortRef(m.Build.Ref), m.Build.Entry)
+	out, err := gate.ProduceBundle(*m.Build, "")
+	if err != nil {
+		return err
+	}
+	dest := filepath.Join(dir, m.Entrypoint)
+	if err := os.WriteFile(dest, out, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", dest, err)
+	}
+	fmt.Printf("wrote %s (%d bytes)\n", dest, len(out))
+	return nil
+}
+
+// shortRef abbreviates a commit SHA for human-facing output.
+func shortRef(ref string) string {
+	if len(ref) > 12 {
+		return ref[:12]
+	}
+	return ref
 }
 
 func printReport(rep *gate.Report) {

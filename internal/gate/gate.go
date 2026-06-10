@@ -92,8 +92,9 @@ func (r *Report) Errors() []Finding {
 	return out
 }
 
-func (r *Report) addError(code, msg string)        { r.add(SeverityError, code, msg, "") }
-func (r *Report) addErrorFile(code, msg, f string) { r.add(SeverityError, code, msg, f) }
+func (r *Report) addError(code, msg string)          { r.add(SeverityError, code, msg, "") }
+func (r *Report) addErrorFile(code, msg, f string)   { r.add(SeverityError, code, msg, f) }
+func (r *Report) addWarningFile(code, msg, f string) { r.add(SeverityWarning, code, msg, f) }
 
 func (r *Report) add(sev Severity, code, msg, file string) {
 	r.Findings = append(r.Findings, Finding{Severity: sev, Code: code, Message: msg, File: file})
@@ -113,6 +114,13 @@ type Limits struct {
 	// module is exempt from MaxFileBytes and does not count toward MaxTotalBytes;
 	// everything else in the plugin still obeys the normal limits.
 	MaxWasmEntrypointBytes int64
+
+	// MaxJSBundleBytes is the separate budget for a *bundled* JS entrypoint (a
+	// plugin with a [build] block, ADR 0001). A dependency bundle is larger and
+	// partly machine-generated, so — like a wasm module — it gets its own bound
+	// instead of the text-sized per-file limit, and does not count toward
+	// MaxTotalBytes. A hand-written JS entrypoint still obeys MaxFileBytes.
+	MaxJSBundleBytes int64
 }
 
 // DefaultLimits are applied when CheckPlugin is called without overrides.
@@ -122,7 +130,24 @@ func DefaultLimits() Limits {
 		MaxTotalBytes:          1 * 1024 * 1024, // 1 MiB
 		MaxFiles:               32,
 		MaxWasmEntrypointBytes: 8 * 1024 * 1024, // 8 MiB
+		MaxJSBundleBytes:       2 * 1024 * 1024, // 2 MiB
 	}
+}
+
+// Options tunes a gate run beyond the size Limits. The zero value is the cheap,
+// offline pass a contributor gets locally; CI turns on the heavier checks.
+type Options struct {
+	// VerifyBuild turns on reproducible-bundle verification (ADR 0001): for a
+	// plugin with a [build] block, the gate clones the linked source at the
+	// pinned commit, installs its locked dependencies (no install scripts),
+	// re-bundles with the canonical esbuild configuration, and requires the
+	// result to equal the committed entrypoint byte-for-byte. It needs git, npm,
+	// and network, so it is off by default (an unverified bundle is reported as a
+	// non-blocking warning) and CI runs with it on.
+	VerifyBuild bool
+	// WorkDir is the parent directory for the temporary clones build
+	// verification makes. Empty uses the OS temp dir.
+	WorkDir string
 }
 
 // allowedAuxFiles are non-source files a plugin may include alongside its manifest
@@ -136,9 +161,18 @@ var allowedAuxExts = map[string]bool{
 	".json": true, // small static data / fixtures
 }
 
-// CheckPlugin runs the full gate against a plugin directory and returns a Report.
-// It does not execute any plugin code.
+// CheckPlugin runs the full gate against a plugin directory with the default
+// options (no build verification) and returns a Report. It does not execute any
+// plugin code.
 func CheckPlugin(dir string, limits Limits) *Report {
+	return CheckPluginWithOptions(dir, limits, Options{})
+}
+
+// CheckPluginWithOptions is CheckPlugin with explicit Options, so a caller (CI)
+// can turn on reproducible-bundle verification. It still never executes plugin
+// code: the heaviest thing it does is clone, install (scripts disabled), and
+// bundle a plugin's linked source, none of which runs the plugin's logic.
+func CheckPluginWithOptions(dir string, limits Limits, opts Options) *Report {
 	name := filepath.Base(dir)
 	r := &Report{Dir: dir, Name: name}
 
@@ -175,7 +209,10 @@ func CheckPlugin(dir string, limits Limits) *Report {
 		case manifest.RuntimeLua:
 			gateLua(r, m.Entrypoint, src)
 		case manifest.RuntimeJS:
-			gateJS(r, m.Entrypoint, src)
+			gateJS(r, m.Entrypoint, src, m.Build != nil)
+			// ADR 0001: a bundled JS entrypoint is reproduced from its linked
+			// source and proven equal to what was committed.
+			verifyBundle(r, m, src, opts)
 		case manifest.RuntimeWasm:
 			gateWasm(r, m, src)
 		}
@@ -225,14 +262,22 @@ func (r *Report) checkTree(dir string, m manifest.Manifest, limits Limits) {
 		base := d.Name()
 
 		// A wasm plugin's compiled entrypoint is a binary far larger than any
-		// source file, so it gets its own budget instead of the per-file and
-		// directory-total limits sized for text.
-		if base == m.Entrypoint && m.Runtime == manifest.RuntimeWasm {
+		// source file, and a bundled JS entrypoint (ADR 0001) is similarly
+		// machine-generated and larger than hand-written source, so each gets its
+		// own budget instead of the per-file and directory-total limits sized for
+		// text.
+		switch {
+		case base == m.Entrypoint && m.Runtime == manifest.RuntimeWasm:
 			if info.Size() > limits.MaxWasmEntrypointBytes {
 				r.addErrorFile("wasm.entrypoint_too_large",
 					fmt.Sprintf("compiled module is %d bytes, over the %d-byte wasm entrypoint limit", info.Size(), limits.MaxWasmEntrypointBytes), rel)
 			}
-		} else {
+		case base == m.Entrypoint && m.Runtime == manifest.RuntimeJS && m.Build != nil:
+			if info.Size() > limits.MaxJSBundleBytes {
+				r.addErrorFile("js.bundle_too_large",
+					fmt.Sprintf("bundle is %d bytes, over the %d-byte JS bundle limit", info.Size(), limits.MaxJSBundleBytes), rel)
+			}
+		default:
 			total += info.Size()
 			if info.Size() > limits.MaxFileBytes {
 				r.addErrorFile("tree.file_too_large",

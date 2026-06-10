@@ -40,9 +40,12 @@ plugins/<name>/
 
 - `<name>` is a lowercase slug (`^[a-z0-9][a-z0-9_-]*$`) and **must equal** the
   `name` in `plugin.toml`.
-- A plugin is a **single self-contained entrypoint** — a source file, or one
-  compiled module for `wasm`. The host loads only the entrypoint — there is no
-  `require`/`import`, no `node_modules`, no second module.
+- A plugin is a **single self-contained entrypoint** — a source file, one compiled
+  module for `wasm`, or (for JS/TS) a verified dependency **bundle** (a `[build]`
+  block; see [docs/plugin-spec.md](docs/plugin-spec.md#bundled-dependencies-build)).
+  The host loads only the entrypoint — there is no runtime `require`/`import`, no
+  `node_modules`, no second module. Bundled dependencies are folded into that one
+  file at submission time, and the gate proves the file is exactly its linked source.
 - No binaries (other than a wasm plugin's `.wasm` entrypoint), archives,
   lockfiles, nested directories, or symlinks. Allowed companions are `README.md`,
   `*.md`, `LICENSE`/`*.txt`, `*.json` fixtures, and a `*.d.ts` ambient-types file

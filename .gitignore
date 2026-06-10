@@ -5,3 +5,7 @@
 # Go workspace files
 go.work
 go.work.sum
+
+# Node dependencies (restored from a committed lockfile by the bundle verifier;
+# never committed — see ADR 0001 / examples/lodash-demo)
+node_modules/
