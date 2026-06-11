@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-10T18:49:59.632877458Z",
+  "generated_at": "2026-06-11T17:05:54.533664Z",
   "repository": "https://github.com/paulmeier/kasas-plugins",
   "plugins": [
     {
@@ -25,6 +25,7 @@
         "ui:page"
       ],
       "capability_tier": "write",
+      "tier": "verified",
       "ui": {
         "title": "Coffee Budget",
         "icon": "coin"
@@ -71,6 +72,7 @@
         "ui:page"
       ],
       "capability_tier": "write",
+      "tier": "verified",
       "ui": {
         "title": "Double Charges",
         "icon": "flag"
@@ -114,6 +116,7 @@
         "extensions:write"
       ],
       "capability_tier": "write",
+      "tier": "verified",
       "path": "plugins/large-expense-alert",
       "files": [
         {
@@ -153,6 +156,7 @@
         "extensions:write"
       ],
       "capability_tier": "write",
+      "tier": "verified",
       "path": "plugins/lodash-demo",
       "files": [
         {

@@ -374,3 +374,87 @@ title="Pager"
 		t.Fatalf("expected manifest.invalid, got %v", r.Findings)
 	}
 }
+
+// --- trust tiers (ADR 0003) ---
+
+// TestVerifiedTier: a plugin with only sealed capabilities is Verified and lists.
+func TestVerifiedTier(t *testing.T) {
+	dir := writePlugin(t, "flagger", map[string]string{
+		"plugin.toml": jsManifest,
+		"main.js":     "function OnTransactionCreate(txn) { kasas.setExtension(txn.id, \"flagged\", true); }\nfunction OnUninstall() {}\n",
+		"README.md":   "# flagger\n",
+	})
+	r := CheckPlugin(dir, DefaultLimits())
+	if !r.OK() {
+		t.Fatalf("expected pass, got %v", r.Errors())
+	}
+	if r.TrustTier != TrustVerified {
+		t.Fatalf("expected verified tier, got %q", r.TrustTier)
+	}
+}
+
+// TestConnectedTierListsAndDrawsReview: a net:fetch plugin that calls the
+// sanctioned kasas.fetch host method passes the gate, is tiered Connected, and
+// draws the review warning naming its egress hosts.
+func TestConnectedTierListsAndDrawsReview(t *testing.T) {
+	mf := `
+name="enricher"
+version="1.0.0"
+description="enriches transactions from a merchant API"
+author="a"
+runtime="js"
+entrypoint="main.js"
+license="MIT"
+homepage="https://example.com"
+hooks=["OnTransactionCreate","OnUninstall"]
+capabilities=["transactions:read","net:fetch"]
+[net]
+allow=["api.merchant.example.com"]
+`
+	dir := writePlugin(t, "enricher", map[string]string{
+		"plugin.toml": mf,
+		// kasas.fetch (member access) is the sanctioned host method and must NOT trip
+		// the global-fetch ban.
+		"main.js":   "function OnTransactionCreate(txn) { const r = kasas.fetch({ url: \"https://api.merchant.example.com/x\" }); }\nfunction OnUninstall() {}\n",
+		"README.md": "# enricher\n",
+	})
+	r := CheckPlugin(dir, DefaultLimits())
+	if !r.OK() {
+		t.Fatalf("expected Connected plugin to pass the gate, got %v", r.Errors())
+	}
+	if r.TrustTier != TrustConnected {
+		t.Fatalf("expected connected tier, got %q", r.TrustTier)
+	}
+	if !hasCode(r, "tier.connected") {
+		t.Fatalf("expected the tier.connected review finding, got %v", r.Findings)
+	}
+}
+
+// TestGlobalFetchStillBanned: a bare global fetch() (no host prefix) remains a
+// rejection even when the plugin declares net:fetch — the host exposes no global
+// fetch, so it is a guaranteed runtime failure.
+func TestGlobalFetchStillBanned(t *testing.T) {
+	mf := `
+name="enricher"
+version="1.0.0"
+description="enriches transactions from a merchant API"
+author="a"
+runtime="js"
+entrypoint="main.js"
+license="MIT"
+homepage="https://example.com"
+hooks=["OnTransactionCreate","OnUninstall"]
+capabilities=["transactions:read","net:fetch"]
+[net]
+allow=["api.merchant.example.com"]
+`
+	dir := writePlugin(t, "enricher", map[string]string{
+		"plugin.toml": mf,
+		"main.js":     "function OnTransactionCreate(txn) { fetch(\"https://api.merchant.example.com/x\"); }\nfunction OnUninstall() {}\n",
+		"README.md":   "# enricher\n",
+	})
+	r := CheckPlugin(dir, DefaultLimits())
+	if r.OK() || !hasCode(r, "js.network") {
+		t.Fatalf("expected global fetch() to be rejected (js.network), got %v", r.Findings)
+	}
+}

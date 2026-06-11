@@ -19,7 +19,10 @@
 //     uses (plus import/export checks), so "it loads" is proven at submission time.
 //  3. Capability risk tiering (capabilities.go): write capabilities are surfaced so
 //     a human reviewer (CODEOWNERS) signs off before a plugin that can mutate a
-//     user's ledger is listed.
+//     user's ledger is listed, and an explicit trust tier (verified | connected |
+//     unlisted, ADR 0003) scales that posture — a Connected (net:fetch) plugin
+//     draws a review warning naming its egress hosts, and an Unlisted plugin (a
+//     capability outside the auto-listable set) fails the gate for listing.
 //
 // The gate is deterministic and reads only the plugin directory — it never
 // executes plugin code — so it is safe to run on untrusted submissions in CI.
@@ -68,7 +71,8 @@ type Report struct {
 	Manifest       manifest.Manifest // zero value if the manifest failed to parse
 	ManifestOK     bool
 	Findings       []Finding
-	CapabilityTier Tier
+	CapabilityTier Tier      // read-only vs write: can it mutate data?
+	TrustTier      TrustTier // verified | connected | unlisted (ADR 0003)
 }
 
 // OK reports whether the plugin passed: no error-severity findings.
@@ -197,7 +201,14 @@ func CheckPluginWithOptions(dir string, limits Limits, opts Options) *Report {
 
 	r.checkTree(dir, m, limits)
 	r.CapabilityTier = tierFor(m.Capabilities)
+	r.TrustTier = trustTierFor(m.Capabilities)
 	for _, f := range capabilityFindings(m) {
+		r.Findings = append(r.Findings, f)
+	}
+	// The trust tier (ADR 0003) scales the gate's posture: Connected plugins draw a
+	// review warning naming their egress hosts; an Unlisted plugin fails the gate so
+	// the published index never carries an unreviewed capability surface.
+	for _, f := range trustTierFindings(m) {
 		r.Findings = append(r.Findings, f)
 	}
 

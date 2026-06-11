@@ -317,3 +317,68 @@ entry      = "src/main.ts"
 		t.Fatal("expected [build] on a lua plugin to be rejected")
 	}
 }
+
+// --- [net] block + net:fetch capability (ADR 0002/0003) ---
+
+const netManifestBase = `
+name        = "enricher"
+version     = "1.0.0"
+description = "Enriches transactions from a merchant API."
+author      = "someone"
+runtime     = "lua"
+license     = "MIT"
+homepage    = "https://example.com/enricher"
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["transactions:read", "net:fetch"]
+`
+
+func TestParseNetValid(t *testing.T) {
+	m, err := Parse([]byte(netManifestBase + "[net]\nallow = [\"API.Merchant.Example.com\", \"paperless.lan\"]\n"))
+	if err != nil {
+		t.Fatalf("expected valid net manifest, got error: %v", err)
+	}
+	// Hosts are lowercased and de-duplicated, preserving order.
+	want := []string{"api.merchant.example.com", "paperless.lan"}
+	if len(m.Net.Allow) != len(want) {
+		t.Fatalf("unexpected allow list: %+v", m.Net.Allow)
+	}
+	for i, h := range want {
+		if m.Net.Allow[i] != h {
+			t.Fatalf("allow[%d] = %q, want %q", i, m.Net.Allow[i], h)
+		}
+	}
+}
+
+func TestParseNetRejects(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{"net:fetch without [net] block", netManifestBase},
+		{"net:fetch with empty allow", netManifestBase + "[net]\nallow = []\n"},
+		{"[net] block without net:fetch capability", `
+name = "enricher"
+version = "1.0.0"
+description = "Enriches transactions from a merchant API."
+author = "someone"
+runtime = "lua"
+license = "MIT"
+homepage = "https://example.com"
+hooks = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["transactions:read"]
+[net]
+allow = ["api.example.com"]
+`},
+		{"host with scheme", netManifestBase + "[net]\nallow = [\"https://api.example.com\"]\n"},
+		{"host with port", netManifestBase + "[net]\nallow = [\"api.example.com:443\"]\n"},
+		{"host with path", netManifestBase + "[net]\nallow = [\"api.example.com/x\"]\n"},
+		{"empty host", netManifestBase + "[net]\nallow = [\"\"]\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Parse([]byte(tc.src)); err == nil {
+				t.Fatalf("expected rejection for %q, got none", tc.name)
+			}
+		})
+	}
+}

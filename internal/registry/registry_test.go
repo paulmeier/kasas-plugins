@@ -158,3 +158,62 @@ icon="chart"
 		t.Fatalf("expected ui metadata in the index, got %+v", ui)
 	}
 }
+
+// TestBuildIndexTier checks a sealed plugin lands at tier "verified" in the index.
+func TestBuildIndexTier(t *testing.T) {
+	plugins := t.TempDir()
+	writePlugin(t, plugins, "coffee", map[string]string{
+		"plugin.toml": luaManifest,
+		"main.lua":    "function OnTransactionCreate(t) kasas.apply_labels(t.id, {x=\"y\"}) end\nfunction OnUninstall() end\n",
+		"README.md":   "# coffee\n",
+	})
+	idx, failures, err := Build("https://example.com/repo", plugins, "plugins", gate.DefaultLimits())
+	if err != nil || len(failures) != 0 {
+		t.Fatalf("build: err=%v failures=%v", err, failures)
+	}
+	if idx.Plugins[0].Tier != string(gate.TrustVerified) {
+		t.Fatalf("expected verified tier, got %q", idx.Plugins[0].Tier)
+	}
+	if idx.Plugins[0].Net != nil {
+		t.Fatalf("a verified plugin must carry no net block, got %+v", idx.Plugins[0].Net)
+	}
+}
+
+// TestBuildIndexConnectedTier checks a net:fetch plugin is listed at tier
+// "connected" with its declared egress hosts recorded in the index, so the
+// marketplace can surface them before install.
+func TestBuildIndexConnectedTier(t *testing.T) {
+	plugins := t.TempDir()
+	mf := `
+name        = "enricher"
+version     = "1.0.0"
+description = "enriches transactions from a merchant API"
+author      = "a"
+runtime     = "lua"
+license     = "MIT"
+homepage    = "https://example.com"
+hooks        = ["OnTransactionCreate", "OnUninstall"]
+capabilities = ["transactions:read", "net:fetch"]
+[net]
+allow = ["api.merchant.example.com", "paperless.lan"]
+`
+	writePlugin(t, plugins, "enricher", map[string]string{
+		"plugin.toml": mf,
+		"main.lua":    "function OnTransactionCreate(t) local r = kasas.fetch({url=\"https://api.merchant.example.com/x\"}) end\nfunction OnUninstall() end\n",
+		"README.md":   "# enricher\n",
+	})
+	idx, failures, err := Build("https://example.com/repo", plugins, "plugins", gate.DefaultLimits())
+	if err != nil || len(failures) != 0 {
+		t.Fatalf("build: err=%v failures=%v", err, failures)
+	}
+	if len(idx.Plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(idx.Plugins))
+	}
+	p := idx.Plugins[0]
+	if p.Tier != string(gate.TrustConnected) {
+		t.Fatalf("expected connected tier, got %q", p.Tier)
+	}
+	if p.Net == nil || len(p.Net.Allow) != 2 || p.Net.Allow[0] != "api.merchant.example.com" {
+		t.Fatalf("expected the declared egress hosts in the index, got %+v", p.Net)
+	}
+}

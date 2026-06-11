@@ -3,8 +3,9 @@
 //
 // The index is a single deterministic JSON document generated from the plugins/
 // directory. For every plugin that passes the submission gate it records the
-// manifest metadata, the capability tier, and — critically for install integrity —
-// a per-file SHA-256 and an aggregate content hash. The dashboard fetches the
+// manifest metadata, the capability tier, the explicit trust tier (ADR 0003) and —
+// for a Connected plugin — its declared egress hosts, and — critically for install
+// integrity — a per-file SHA-256 and an aggregate content hash. The dashboard fetches the
 // index, shows the user what a plugin does and what it can touch, downloads the
 // listed files, and verifies each hash before writing them into plugins.dir. The
 // hashes are the chain of custody between "reviewed in this repo" and "running on a
@@ -50,14 +51,24 @@ type Plugin struct {
 	Entrypoint     string   `json:"entrypoint"`
 	Hooks          []string `json:"hooks"`
 	Capabilities   []string `json:"capabilities"`
-	CapabilityTier string   `json:"capability_tier"`
+	CapabilityTier string   `json:"capability_tier"` // "read-only" | "write": can it mutate data?
+	// Tier is the explicit trust tier (ADR 0003): "verified" (statically sealed,
+	// auto-listed), "connected" (net:fetch, egress allowlisted + maintainer-reviewed),
+	// or "unlisted" (a capability outside the auto-listable set — never published, so
+	// this value does not appear in the index in practice). The dashboard groups and
+	// badges plugins by it.
+	Tier string `json:"tier"`
 	// UI is present when the plugin contributes a dashboard page, so the
 	// marketplace can badge it before install.
-	UI          *UIInfo `json:"ui,omitempty"`
-	Path        string  `json:"path"`         // repo-relative dir, e.g. "plugins/budgeting"
-	Files       []File  `json:"files"`        // every file the installer must fetch
-	ContentHash string  `json:"content_hash"` // "sha256:..." over all files
-	SizeBytes   int64   `json:"size_bytes"`
+	UI *UIInfo `json:"ui,omitempty"`
+	// Net is present for a Connected-tier plugin: the exact hosts it may reach
+	// (its [net].allow list), so the marketplace can surface them before install
+	// — the same specific egress claim a reviewer signed off on.
+	Net         *NetInfo `json:"net,omitempty"`
+	Path        string   `json:"path"`         // repo-relative dir, e.g. "plugins/budgeting"
+	Files       []File   `json:"files"`        // every file the installer must fetch
+	ContentHash string   `json:"content_hash"` // "sha256:..." over all files
+	SizeBytes   int64    `json:"size_bytes"`
 }
 
 // UIInfo mirrors the manifest's [ui] block: the sidebar title and curated icon
@@ -65,6 +76,12 @@ type Plugin struct {
 type UIInfo struct {
 	Title string `json:"title"`
 	Icon  string `json:"icon"`
+}
+
+// NetInfo mirrors the manifest's [net] block: the egress allowlist a Connected
+// plugin declares, surfaced so the marketplace shows exactly what it may reach.
+type NetInfo struct {
+	Allow []string `json:"allow"`
 }
 
 // File is one installable file with its integrity hash, so the dashboard can verify
@@ -123,6 +140,10 @@ func pluginEntry(rep *gate.Report, dir, repoRelPath string) (Plugin, error) {
 	if m.UI != nil {
 		ui = &UIInfo{Title: m.UI.Title, Icon: m.UI.Icon}
 	}
+	var net *NetInfo
+	if m.Net != nil && len(m.Net.Allow) > 0 {
+		net = &NetInfo{Allow: append([]string(nil), m.Net.Allow...)}
+	}
 	return Plugin{
 		Name:           m.Name,
 		Version:        m.Version,
@@ -135,7 +156,9 @@ func pluginEntry(rep *gate.Report, dir, repoRelPath string) (Plugin, error) {
 		Hooks:          hookStrings(m.Hooks),
 		Capabilities:   capStrings(m.Capabilities),
 		CapabilityTier: string(rep.CapabilityTier),
+		Tier:           string(rep.TrustTier),
 		UI:             ui,
+		Net:            net,
 		Path:           repoRelPath,
 		Files:          files,
 		ContentHash:    hash,

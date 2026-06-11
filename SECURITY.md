@@ -38,9 +38,18 @@ ensure every listed plugin respects that boundary:
    disabled, re-bundles with one fixed esbuild configuration, and requires the
    result to equal the committed entrypoint byte-for-byte. A mismatch is a hard
    rejection, so the artifact a user installs is provably the linked source.
-4. **Least privilege, reviewed.** A plugin declares the capabilities it needs; the
-   gate tiers them and a maintainer signs off before any plugin that can *write* a
-   user's data is listed.
+4. **Least privilege, tiered, reviewed.** A plugin declares the capabilities it
+   needs; the gate computes a [trust tier](docs/submission-guidelines.md#trust-tiers-adr-0003)
+   from them and scales its posture to match
+   ([ADR 0003](https://github.com/paulmeier/kasas/blob/main/docs/architecture/decisions/0003-marketplace-trust-tiers.md)).
+   A **Verified** plugin (read/label/extension/page capabilities only) is statically
+   sealed — it can reach neither the network nor the disk — and flows through the
+   automated checks. A **Connected** plugin additionally declares `net:fetch`: it can
+   make host-mediated, allowlisted outbound requests, so a maintainer reviews its
+   declared egress hosts before it is listed and that list is recorded in the index.
+   A plugin requesting anything outside that reviewed set is **Unlisted** — the gate
+   refuses to publish it (sideload only). A maintainer also signs off before any
+   plugin that can *write* a user's data is listed.
 5. **Integrity to install.** The published index records a SHA-256 for every file
    and an aggregate content hash per plugin. The dashboard verifies these before
    writing anything into `plugins.dir`, so what a user installs is byte-for-byte what
