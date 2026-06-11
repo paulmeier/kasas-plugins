@@ -47,6 +47,7 @@ category = "food"
 | `homepage` | yes | `https://` URL. *Registry-only.* |
 | `[config]` | no | The plugin's configurable keys **and their defaults**, exposed as `kasas.config`. This block is also the schema of what an end user may override (see [Configuration](#configuration)). |
 | `[ui]` | no | Declares a [dashboard page](#dashboard-pages-ui): `title` (≤40 chars) and an optional curated `icon` name. Requires the `OnPageRender` hook and the `ui:page` capability. |
+| `[net]` | no | Declares the egress allowlist for a [network](#network-access-net) plugin: `allow`, the exact hosts `kasas.fetch` may reach. Requires (and is required by) the `net:fetch` capability. |
 | `[build]` | no | Marks the JS/TS entrypoint as a reproducible dependency **bundle** (ADR 0001) and links the source the gate re-bundles to verify it. *Registry-only.* See [Bundled dependencies](#bundled-dependencies-build). |
 
 Unknown keys are tolerated (the host ignores them), but don't rely on them — they
@@ -91,6 +92,7 @@ A capability is a permission the host enforces at the `kasas` API boundary.
 | `labels:write` | `kasas.apply_labels`, `kasas.remove_labels` | **write** |
 | `extensions:write` | `kasas.set_extension`, `kasas.remove_extension` | **write** |
 | `ui:page` | a [dashboard page](#dashboard-pages-ui) (sidebar entry + rendered page) | read-only* |
+| `net:fetch` | `kasas.fetch(...)` — host-mediated, allowlisted outbound HTTP(S) (requires a [`[net]`](#network-access-net) block) | **connected** |
 
 `kasas.log(...)`, `kasas.config`, and `kasas.set_config(...)` are always
 available and need no capability (`set_config` only writes the plugin's own
@@ -100,6 +102,12 @@ A **write** capability requires maintainer sign-off (see CONTRIBUTING.md).
 capabilities let it read, and its actions write only through those capabilities —
 but the gate surfaces it as a finding so reviewers look at what the page shows
 and does.
+
+The capability `tier` column above is the **risk class** that decides review:
+read-only and write feed the registry's `capability_tier`, while `net:fetch` lifts
+the plugin into the **Connected** [trust tier](submission-guidelines.md#trust-tiers-adr-0003)
+(its egress hosts are reviewed before listing). A plugin requesting anything outside
+this set is **Unlisted** and cannot be published — sideload only.
 
 ## Dashboard pages (`[ui]`)
 
@@ -154,6 +162,37 @@ fields) and an unknown block type is a render error.
 the host's per-hook timeout, serialized with your event hooks. See the
 [host docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#dashboard-pages)
 for the full schema and API surface.
+
+## Network access (`[net]`)
+
+A plugin that needs to reach a service declares the `net:fetch` capability and a
+`[net]` block listing the **exact hosts** it may reach. The two are a unit — each
+requires the other — so a listed plugin always carries a specific, reviewable egress
+surface. The plugin never opens a socket: it calls `kasas.fetch(...)` and the host
+performs an allowlisted, SSRF-checked, logged request
+([host docs](https://github.com/paulmeier/kasas/blob/main/docs/features/plugins.md#network-access-netfetch)).
+
+```toml
+capabilities = ["transactions:read", "net:fetch"]
+
+[net]
+# Bare hostnames only — no scheme, port, or path. Egress is default-deny: a request
+# to any host not listed here is refused, and redirects are re-checked.
+allow = ["api.merchant.example.com", "paperless.lan"]
+```
+
+```lua
+function OnTransactionCreate(txn)
+  local r = kasas.fetch{ url = "https://api.merchant.example.com/receipts/" .. txn.id,
+                         method = "GET", timeout_ms = 5000 }
+  if r.status == 200 then kasas.set_extension(txn.id, "merchant.receipt", r.body) end
+end
+```
+
+Declaring `net:fetch` places the plugin in the **Connected**
+[trust tier](submission-guidelines.md#trust-tiers-adr-0003): a maintainer reviews
+the declared hosts before it is listed, the index records them, and the host
+operator grants any private/LAN host at enable time.
 
 ## Configuration
 

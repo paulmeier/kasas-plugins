@@ -68,6 +68,14 @@ const (
 	// declaratively rendered page). It mutates nothing itself, but it puts
 	// plugin-authored content in front of the user, so the gate surfaces it.
 	CapUIPage Capability = "ui:page"
+	// CapNetFetch lets a plugin make outbound HTTP(S) requests through the host
+	// (kasas.fetch), but only to the hosts it declares in the manifest's
+	// [net].allow block — egress is host-mediated, default-deny, and allowlisted
+	// (ADR 0002). It is qualitatively more dangerous than a data-write capability,
+	// so it lifts a plugin into the Connected trust tier ([gate.TrustConnected]),
+	// which requires maintainer review of the declared egress list before listing
+	// (ADR 0003). Declaring it without a non-empty [net].allow is a manifest error.
+	CapNetFetch Capability = "net:fetch"
 )
 
 var knownCapabilities = map[Capability]bool{
@@ -75,6 +83,7 @@ var knownCapabilities = map[Capability]bool{
 	CapLabelsWrite:      true,
 	CapExtensionsWrite:  true,
 	CapUIPage:           true,
+	CapNetFetch:         true,
 }
 
 // knownUIIcons is the curated sidebar icon set, mirroring the host
@@ -167,6 +176,14 @@ type Manifest struct {
 	// host; mirrored here so the gate enforces the same unit rule.
 	UI *UIManifest `toml:"ui"`
 
+	// Net, when present, declares the plugin's egress allowlist: the exact hosts
+	// kasas.fetch may reach. It comes as a unit with the net:fetch capability
+	// (each requires the other), so a listed Connected-tier plugin always carries
+	// a specific, reviewable egress surface (ADR 0002/0003). Read by the host;
+	// mirrored here so the gate enforces the same unit rule and records the
+	// allowlist in the index for the marketplace to surface before install.
+	Net *NetManifest `toml:"net"`
+
 	// Build, when present, declares that the entrypoint is a dependency bundle
 	// produced from a linked source repository (ADR 0001). It records exactly
 	// where that source lives and at what immutable commit, so the gate can
@@ -203,6 +220,18 @@ type UIManifest struct {
 	Title string `toml:"title"`
 	Icon  string `toml:"icon"`
 }
+
+// NetManifest is the optional [net] block: the egress allowlist for a net:fetch
+// plugin. Egress is default-deny — the plugin may only reach the hosts listed
+// here (bare hostnames, no scheme/port/path), matching the host exactly.
+type NetManifest struct {
+	Allow []string `toml:"allow"`
+}
+
+// maxNetAllowHosts bounds the declared egress list so the review and the
+// install/enable prompt (which surface every host) stay readable. Mirrors the
+// host's limit.
+const maxNetAllowHosts = 32
 
 // Parse decodes and validates a plugin.toml under the registry's strict rules,
 // normalizing a few fields (defaulting the entrypoint) so the result is ready to
@@ -267,6 +296,9 @@ func (m *Manifest) normalizeAndValidate() error {
 		}
 	}
 	if err := m.validateUI(); err != nil {
+		return err
+	}
+	if err := m.validateNet(); err != nil {
 		return err
 	}
 	if err := m.validateBuild(); err != nil {
@@ -345,6 +377,75 @@ func (m *Manifest) validateUI() error {
 		return fmt.Errorf("a [ui] block requires the %q capability", CapUIPage)
 	}
 	return nil
+}
+
+// validateNet enforces the host's egress contract (ADR 0002): the net:fetch
+// capability and a non-empty [net].allow list come as a unit — each requires the
+// other — so a listed plugin can never carry an allowlist it can't use, nor the
+// capability without a specific, reviewable egress surface. Hosts are normalized
+// (lowercased, trimmed, no scheme/port/path) and bounded, so the list the index
+// records and the dashboard surfaces is exactly the list the host enforces.
+func (m *Manifest) validateNet() error {
+	requestsNet := false
+	for _, c := range m.Capabilities {
+		if c == CapNetFetch {
+			requestsNet = true
+			break
+		}
+	}
+
+	if m.Net == nil {
+		if requestsNet {
+			return fmt.Errorf("capability %q requires a [net] block with a non-empty allow list", CapNetFetch)
+		}
+		return nil
+	}
+	if !requestsNet {
+		return fmt.Errorf("a [net] block requires the %q capability", CapNetFetch)
+	}
+
+	seen := make(map[string]bool, len(m.Net.Allow))
+	out := make([]string, 0, len(m.Net.Allow))
+	for _, h := range m.Net.Allow {
+		host, err := normalizeNetHost(h)
+		if err != nil {
+			return err
+		}
+		if seen[host] {
+			continue
+		}
+		seen[host] = true
+		out = append(out, host)
+	}
+	if len(out) == 0 {
+		return fmt.Errorf("capability %q requires a non-empty [net].allow list", CapNetFetch)
+	}
+	if len(out) > maxNetAllowHosts {
+		return fmt.Errorf("[net].allow lists %d hosts, over the limit of %d", len(out), maxNetAllowHosts)
+	}
+	m.Net.Allow = out
+	return nil
+}
+
+// normalizeNetHost validates and canonicalizes one [net].allow entry: a bare
+// hostname (or IP), no scheme, port, path, or whitespace, lowercased. Matching at
+// request time is exact on the URL's hostname, so the stored form must be the
+// hostname alone. Mirrors the host's normalizer.
+func normalizeNetHost(h string) (string, error) {
+	host := strings.ToLower(strings.TrimSpace(h))
+	if host == "" {
+		return "", fmt.Errorf("[net].allow contains an empty host")
+	}
+	if strings.ContainsAny(host, "/\\ \t") || strings.Contains(host, "://") {
+		return "", fmt.Errorf("[net].allow host %q must be a bare hostname (no scheme, path, or spaces)", h)
+	}
+	if strings.ContainsRune(host, ':') && !strings.HasPrefix(host, "[") {
+		// A port would never match a hostname-only comparison; reject it explicitly
+		// so "host:443" fails loudly rather than silently never matching. Bracketed
+		// IPv6 literals (which contain ':' but start with '[') are still allowed.
+		return "", fmt.Errorf("[net].allow host %q must not include a port", h)
+	}
+	return host, nil
 }
 
 // commitRE matches a full git commit SHA (40 lowercase hex chars). The build

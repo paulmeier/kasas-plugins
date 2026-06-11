@@ -35,7 +35,9 @@ plugins in the repo, so the raw endpoint is authoritative.
       "hooks": ["OnTransactionCreate", "OnTransactionUpdate"],
       "capabilities": ["transactions:read", "labels:write"],
       "capability_tier": "write",             // "read-only" | "write"
+      "tier": "verified",                     // trust tier: "verified" | "connected" (ADR 0003)
       "ui": { "title": "Coffee Budget", "icon": "coin" },  // present iff the plugin has a dashboard page
+      "net": { "allow": ["paperless.lan"] },  // present iff the plugin is Connected (declares net:fetch)
       "path": "plugins/coffee-budget",        // repo-relative directory
       "files": [
         { "path": "README.md",   "sha256": "…", "size": 776 },
@@ -64,13 +66,18 @@ document is byte-stable across machines (only `generated_at` varies, which the
 | `plugins[].files[]` | Every file the installer must download: `path` (plugin-relative, forward slashes), `sha256` (hex), `size`. |
 | `plugins[].content_hash` | `sha256:` + the SHA-256 of `"<path>\0<filehash>\n"` lines in `path` order. Changes if any file's name or content changes — use it to detect updates. |
 | `plugins[].capability_tier` | `read-only` if the plugin only reads; `write` if it can modify user data. The dashboard should warn more prominently on `write`. |
+| `plugins[].tier` | The explicit **trust tier** ([ADR 0003](https://github.com/paulmeier/kasas/blob/main/docs/architecture/decisions/0003-marketplace-trust-tiers.md)): `verified` (statically sealed — reaches neither network nor disk; auto-listed) or `connected` (declares `net:fetch`, so it can make host-mediated outbound requests to its `net.allow` hosts; the egress list is maintainer-reviewed). A third tier, `unlisted` (a capability outside the auto-listable set), is never published — the gate fails it — so it does not appear here. The dashboard groups and badges plugins by this field. |
+| `plugins[].net` | Present only for a **Connected** plugin: `{ "allow": [...] }`, the exact hosts the plugin may reach (its manifest `[net].allow` list). Surface it before install so the user sees the precise egress claim a reviewer signed off on. |
 | `plugins[].ui` | Present only when the plugin contributes a dashboard page: its sidebar `title` and curated `icon` name. The marketplace can badge such plugins ("adds a dashboard page") before install. |
 
 ## How the dashboard should install a plugin
 
 1. Fetch and parse the index; check `schema_version`.
 2. Present the catalog. For each plugin show `description`, `author`, `runtime`,
-   `hooks`, `capabilities`, and surface `capability_tier` (warn on `write`).
+   `hooks`, `capabilities`, and surface `capability_tier` (warn on `write`). Group
+   and badge by `tier`: a `connected` plugin is more exposed than a `verified` one,
+   so show its `net.allow` hosts ("talks to: paperless.lan") before install, and
+   note that enabling it will collect any private/LAN egress grants on the host.
 3. On install, download each file in `files[]` from
    `<repository>/raw/<ref>/<path>/<file.path>` and verify its `sha256` **before**
    writing it.

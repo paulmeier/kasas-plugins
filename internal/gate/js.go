@@ -36,7 +36,11 @@ var jsBannedPatterns = []struct {
 	{"js.host_env", regexp.MustCompile(`\b__filename\b`), "Node filesystem globals are not available"},
 	{"js.host_env", regexp.MustCompile(`\bDeno\b`), "the Deno runtime is not available in the host"},
 	{"js.host_env", regexp.MustCompile(`\bBun\b`), "the Bun runtime is not available in the host"},
-	{"js.network", regexp.MustCompile(`\bfetch\s*\(`), "network access (fetch) is not available to plugins"},
+	// Ban the GLOBAL fetch() — the host exposes no such global. A member call like
+	// kasas.fetch(...) is the sanctioned, capability-gated, allowlisted host method
+	// (net:fetch, ADR 0002), so a call preceded by "." is allowed; the host facade
+	// and the manifest's net:fetch capability are the real controls on it.
+	{"js.network", regexp.MustCompile(`(^|[^.\w])fetch\s*\(`), "the global fetch() is not available; outbound requests go through the host-mediated kasas.fetch (requires the net:fetch capability)"},
 	{"js.network", regexp.MustCompile(`\bXMLHttpRequest\b`), "network access (XMLHttpRequest) is not available to plugins"},
 	{"js.network", regexp.MustCompile(`\bWebSocket\b`), "network access (WebSocket) is not available to plugins"},
 	{"js.network", regexp.MustCompile(`\bnavigator\b`), "the navigator object is not available in the host"},

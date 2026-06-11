@@ -50,7 +50,7 @@ Do all work through the `kasas` table. The host opens only `base`, `table`,
 | `js.dynamic_code` | No `eval(...)`, `new Function`, or `Function(...)`. |
 | `js.module_loader` | No `require(...)`, `import` (static or dynamic), or `export`. |
 | `js.host_env` | No `process`, `globalThis`, `__dirname`, `__filename`, `Deno`, `Bun`. |
-| `js.network` | No `fetch(...)`, `XMLHttpRequest`, `WebSocket`, `navigator`. |
+| `js.network` | No global `fetch(...)`, `XMLHttpRequest`, `WebSocket`, `navigator`. The **member** call `kasas.fetch(...)` is allowed — it is the sanctioned, allowlisted host method gated by the `net:fetch` capability (see [Network access](#network-access-netfetch)); a bare global `fetch()` is not available and is rejected. |
 | `js.wasm` | No `WebAssembly`. |
 | `js.worker` | No `new Worker`. |
 | `js.sandbox_escape` | No `__proto__` or `constructor.constructor`. |
@@ -132,15 +132,61 @@ sandbox (identical to Lua/JS — every host call is capability-checked), and the
 registry's content hashes; your README and `homepage` should link the module's
 source.
 
+## Network access (`net:fetch`)
+
+By default a plugin has **no network access** — that is what makes it safe to
+install, and the per-runtime scans above reject every network construct. A plugin
+that needs to talk to a service (an importer, an enricher, a notifier) declares the
+`net:fetch` capability and a `[net]` block listing the **exact hosts** it may reach
+([ADR 0002](https://github.com/paulmeier/kasas/blob/main/docs/architecture/decisions/0002-plugin-network-capability.md)):
+
+```toml
+capabilities = ["transactions:read", "net:fetch"]
+
+[net]
+# Egress is default-deny. Bare hostnames only — no scheme, port, or path. The host
+# refuses any host not listed here; the registry records this list in the index.
+allow = ["api.merchant.example.com", "paperless.lan"]
+```
+
+The plugin never opens a socket — it calls the host method `kasas.fetch(...)`, and
+the host performs the allowlisted, SSRF-checked, logged request. So in JS/TS the
+**member** call `kasas.fetch(...)` is allowed even though a bare global `fetch()`
+is not. `net:fetch` without a non-empty `[net].allow` (or a `[net]` block without
+`net:fetch`) is a manifest error.
+
+`net:fetch` puts a plugin in the **Connected** trust tier (see below): egress turns
+a bug into exfiltration, so the declared allowlist is reviewed by a maintainer
+before the plugin is listed.
+
+## Trust tiers (ADR 0003)
+
+The gate computes an explicit **trust tier** from a plugin's declared capabilities
+and records it in the index as `tier`. It is the at-a-glance "how far am I extending
+trust" signal the dashboard groups and badges by:
+
+| Tier | Capabilities | Posture |
+| ---- | ------------ | ------- |
+| `verified` | `transactions:read`, `labels:write`, `extensions:write`, `ui:page` | Statically sealed — reaches neither network nor disk. Auto-listed once the checks above pass. The default. |
+| `connected` | the above **+ `net:fetch`** (with a `[net].allow` list) | A maintainer must review the declared egress hosts before listing; the host enables it with the same admin opt-in and collects any private/LAN grants. |
+| `unlisted` | anything outside the auto-listable set (e.g. a future broader capability) | **Not auto-listed** — the gate fails it, sideload only. |
+
+The tier is a *function of* your capabilities, not something you set — declaring
+`net:fetch` *is* asking for Connected and its heavier review.
+
 ## Capability findings (advisory)
 
 | Code | Meaning |
 | ---- | ------- |
 | `cap.write_requested` | The plugin requests `labels:write` or `extensions:write`. It can modify user data; a maintainer must sign off, and your README must justify it. |
 | `cap.none` | The plugin requests no capabilities — its hooks can only log. Confirm that's intended. |
+| `tier.connected` | *(warning)* The plugin requests `net:fetch`, placing it in the Connected tier. The finding names the declared egress hosts a maintainer must review and sign off on. Does not fail the gate by itself. |
+| `tier.unlisted` | *(error)* The plugin requests a capability outside the registry's auto-listable set, so it cannot be published — install it by sideloading only. |
 
-These never fail the gate by themselves; they drive human review and are reflected
-in the registry's `capability_tier`.
+The advisory findings never fail the gate by themselves; they drive human review and
+are reflected in the registry's `capability_tier` and `tier`. `tier.unlisted` is the
+exception — it is an error, because an unreviewed capability surface must not land in
+the published index.
 
 ## After it passes
 

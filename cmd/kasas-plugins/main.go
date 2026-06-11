@@ -168,7 +168,7 @@ func printReport(rep *gate.Report) {
 	}
 	fmt.Printf("\n%s  %s", status, rep.Name)
 	if rep.ManifestOK {
-		fmt.Printf("  (%s, %s, tier=%s)", rep.Manifest.Version, rep.Manifest.Runtime, rep.CapabilityTier)
+		fmt.Printf("  (%s, %s, tier=%s, capability=%s)", rep.Manifest.Version, rep.Manifest.Runtime, rep.TrustTier, rep.CapabilityTier)
 	}
 	fmt.Println()
 	for _, f := range rep.Findings {
